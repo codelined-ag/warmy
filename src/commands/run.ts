@@ -13,7 +13,7 @@ export async function runWarmup(): Promise<void> {
     label: string,
     provider: "claude" | "codex",
     warmupFn: (msg: string) => WarmupResult | Promise<WarmupResult>,
-    getNextWarmup: () => number | null
+    getNextWarmup: (lastWarmupAt?: number | null) => number | null
   ) {
     if ((!config.claudeEnabled && provider === "claude") ||
         (!config.codexEnabled && provider === "codex")) {
@@ -21,7 +21,10 @@ export async function runWarmup(): Promise<void> {
       return;
     }
 
-    const nextWarmup = getNextWarmup();
+    const lastWarmupTs = config.lastWarmupAt[provider]
+      ? new Date(config.lastWarmupAt[provider]!).getTime()
+      : null;
+    const nextWarmup = getNextWarmup(lastWarmupTs);
 
     if (nextWarmup === null) {
       console.log(`○ ${label}: user was active near window reset, skipping`);

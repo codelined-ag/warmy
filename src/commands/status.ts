@@ -16,7 +16,10 @@ export async function status(): Promise<void> {
   console.log(`Message:     "${config.warmupMessage}"`);
 
   if (config.claudeEnabled) {
-    const next = getNextClaudeWarmup();
+    const lastWarmup = config.lastWarmupAt.claude
+      ? new Date(config.lastWarmupAt.claude).getTime()
+      : null;
+    const next = getNextClaudeWarmup(lastWarmup);
     if (next === null) {
       console.log(`\nClaude:    user active near window reset, skipping this window`);
     } else if (next <= Date.now()) {
