@@ -1,7 +1,7 @@
 import { existsSync } from "fs";
 import { loadConfig, getConfigPath } from "../config.js";
-import { WARMUP_INTERVAL_SECONDS } from "../warmup/types.js";
 import { isSchedulerInstalled } from "../scheduler/index.js";
+import { getNextClaudeWarmup, getNextCodexWarmup } from "../detectors/session.js";
 
 export async function status(): Promise<void> {
   const config = await loadConfig();
@@ -11,22 +11,34 @@ export async function status(): Promise<void> {
   console.log("=== Warmy Status ===\n");
   console.log(`Config file: ${configPath} ${existsSync(configPath) ? "✓" : "(not found)"}`);
   console.log(`Scheduler:   ${installed ? "✓ installed (every 5 min)" : "✗ not installed"}`);
-  const hours = Math.floor(WARMUP_INTERVAL_SECONDS / 3600);
-  const mins = Math.floor((WARMUP_INTERVAL_SECONDS % 3600) / 60);
-  const intervalLabel = mins > 0 ? `${hours}hr ${mins}min` : `${hours}hr`;
-  console.log(`Warmup interval: ${intervalLabel} after last activity`);
   console.log(`Claude Code: ${config.claudeEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Codex CLI:   ${config.codexEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Message:     "${config.warmupMessage}"`);
 
-  if (config.lastWarmupAt.claude) {
-    const next = new Date(new Date(config.lastWarmupAt.claude).getTime() + WARMUP_INTERVAL_SECONDS * 1000).toISOString();
-    console.log(`\nClaude next: ${next}`);
+  if (config.claudeEnabled) {
+    const next = getNextClaudeWarmup();
+    if (next === null) {
+      console.log(`\nClaude:    user active near window reset, skipping this window`);
+    } else if (next <= Date.now()) {
+      console.log(`\nClaude:    window reset, warmup ready to fire`);
+    } else {
+      const mins = Math.floor((next - Date.now()) / 60000);
+      console.log(`\nClaude:    next warmup at ${new Date(next).toISOString()} (${mins} min)`);
+    }
   }
-  if (config.lastWarmupAt.codex) {
-    const next = new Date(new Date(config.lastWarmupAt.codex).getTime() + WARMUP_INTERVAL_SECONDS * 1000).toISOString();
-    console.log(`Codex next:  ${next}`);
+
+  if (config.codexEnabled) {
+    const next = getNextCodexWarmup();
+    if (next === null) {
+      console.log(`Codex:     user active near window reset, skipping this window`);
+    } else if (next <= Date.now()) {
+      console.log(`Codex:     window reset, warmup ready to fire`);
+    } else {
+      const mins = Math.floor((next - Date.now()) / 60000);
+      console.log(`Codex:     next warmup at ${new Date(next).toISOString()} (${mins} min)`);
+    }
   }
+
   if (config.lastRun) console.log(`\nLast run: ${config.lastRun}`);
   if (config.lastResult.claude) {
     const { success, timestamp } = config.lastResult.claude;

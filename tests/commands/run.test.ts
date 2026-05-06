@@ -2,6 +2,10 @@ import { describe, it, vi, beforeEach, expect } from "vitest";
 
 vi.mock("../../dist/detectors/claude.js", () => ({ isClaudeInstalled: vi.fn() }));
 vi.mock("../../dist/detectors/codex.js", () => ({ isCodexInstalled: vi.fn() }));
+vi.mock("../../dist/detectors/session.js", () => ({
+  getNextClaudeWarmup: vi.fn(),
+  getNextCodexWarmup: vi.fn(),
+}));
 vi.mock("../../dist/config.js", () => ({
   loadConfig: vi.fn(),
   saveConfig: vi.fn(),
@@ -20,6 +24,7 @@ describe("runWarmup", () => {
 
   it("should skip warmup when not needed", async () => {
     const { loadConfig } = await import("../../dist/config.js");
+    const { getNextClaudeWarmup } = await import("../../dist/detectors/session.js");
     vi.mocked(loadConfig).mockResolvedValue({
       scheduleTime: "06:00", claudeEnabled: true, codexEnabled: false,
       lastRun: null,
@@ -27,6 +32,7 @@ describe("runWarmup", () => {
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
       lastResult: { claude: null, codex: null }
     });
+    vi.mocked(getNextClaudeWarmup).mockReturnValue(Date.now() + 600000);
 
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const { runWarmup } = await import(RUN_PATH);
@@ -37,12 +43,14 @@ describe("runWarmup", () => {
 
   it("should warm up claude when needed", async () => {
     const { loadConfig, saveConfig } = await import("../../dist/config.js");
+    const { getNextClaudeWarmup } = await import("../../dist/detectors/session.js");
     vi.mocked(loadConfig).mockResolvedValue({
       scheduleTime: "06:00", claudeEnabled: true, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
       lastResult: { claude: null, codex: null }
     });
+    vi.mocked(getNextClaudeWarmup).mockReturnValue(0);
 
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const { runWarmup } = await import(RUN_PATH);
