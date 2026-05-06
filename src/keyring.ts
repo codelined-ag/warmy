@@ -21,7 +21,3 @@ export async function removeToken(account: "claude" | "codex"): Promise<boolean>
   const acct = account === "claude" ? ACCOUNT_CLAUDE : ACCOUNT_CODEX;
   return await keytar.deletePassword(SERVICE, acct);
 }
-
-export function getKeyringServiceName(): string {
-  return SERVICE;
-}

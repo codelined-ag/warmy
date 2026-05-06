@@ -22,20 +22,23 @@ export async function detectClaudeCredentials(): Promise<ClaudeCredentials> {
     const data = JSON.parse(content);
 
     let apiKey: string | null = null;
+    let oauthToken: string | null = null;
 
     if (
       typeof data?.anthropic?.credentials?.key === "string" &&
-      data.anthropic.credentials.key.startsWith("sk-ant-")
+      data.anthropic.credentials.key.startsWith("sk-ant-api")
     ) {
       apiKey = data.anthropic.credentials.key;
-    } else if (
-      typeof data?.claudeAiOauth?.accessToken === "string" &&
-      data.claudeAiOauth.accessToken.startsWith("sk-ant-")
-    ) {
-      apiKey = data.claudeAiOauth.accessToken;
     }
 
-    return { apiKey, oauthToken: null };
+    if (
+      typeof data?.claudeAiOauth?.accessToken === "string" &&
+      data.claudeAiOauth.accessToken.startsWith("sk-ant-oat")
+    ) {
+      oauthToken = data.claudeAiOauth.accessToken;
+    }
+
+    return { apiKey, oauthToken };
   } catch {
     return { apiKey: null, oauthToken: null };
   }

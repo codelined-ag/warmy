@@ -3,20 +3,22 @@
 import { Command } from "commander";
 import { createInterface } from "readline";
 import { platform } from "os";
-import { detectClaudeCredentials, isClaudeInstalled } from "./detectors/claude.js";
-import { detectCodexCredentials, isCodexInstalled } from "./detectors/codex.js";
-import { warmupAnthropic } from "./warmup/anthropic.js";
-import { warmupOpenAI } from "./warmup/openai.js";
-import { storeToken, getToken, removeToken } from "./keyring.js";
-import {
-  loadConfig,
+import { fileURLToPath } from "url";
+import { isClaudeInstalled } from "./detectors/claude.js";
+import { isCodexInstalled } from "./detectors/codex.js";
+import { warmupClaude } from "./warmup/anthropic.js";
+import { warmupCodex } from "./warmup/openai.js";
+import { removeToken } from "./keyring.js";
+import { getLastClaudeActivity, getLastCodexActivity } from "./detectors/session.js";
+import { loadConfig,
   saveConfig,
   getWarmyDir,
   getConfigPath,
   getPlatform,
-  shouldWarmup,
   type WarmyConfig,
 } from "./config.js";
+import { WARMUP_INTERVAL_SECONDS } from "./warmup/types.js";
+import type { WarmupResult } from "./warmup/types.js";
 import {
   installScheduler,
   uninstallScheduler,
@@ -70,83 +72,8 @@ async function init(): Promise<void> {
     return;
   }
 
-  console.log("=== Auto-detecting credentials ===\n");
-
-  let claudeToken: string | null = null;
-  let codexToken: string | null = null;
-
-  if (claudeDetected) {
-    const creds = await detectClaudeCredentials();
-    if (creds.apiKey) {
-      console.log(`Claude Code API key found in ~/.claude/.credentials.json`);
-      claudeToken = creds.apiKey;
-    } else {
-      console.log(`Claude Code API key not found in local credentials.`);
-      console.log(`  Run 'claude setup-token' to generate a long-lived token.`);
-    }
-  }
-
-  if (codexDetected) {
-    const creds = await detectCodexCredentials();
-    if (creds.apiKey) {
-      console.log(`Codex CLI API key found in ~/.codex/auth.json`);
-      codexToken = creds.apiKey;
-    } else if (creds.accessToken) {
-      console.log(`Codex CLI access token found (ChatGPT OAuth)`);
-      codexToken = creds.accessToken;
-    } else {
-      console.log(`Codex CLI credentials not found.`);
-      console.log(`  Run 'codex login' or set OPENAI_API_KEY environment variable.`);
-    }
-  }
-
-  console.log("");
-
-  const enableClaude = await askYesNo(
-    "Enable Claude Code warmup?",
-    claudeToken !== null
-  );
-
-  let claudeTokenToStore: string | null = null;
-  if (enableClaude) {
-    if (claudeToken) {
-      const confirm = await askYesNo("Store detected token in OS Keychain?", true);
-      if (confirm) claudeTokenToStore = claudeToken;
-    } else {
-      console.log(
-        "\nPlease provide your Claude Code OAuth token (from 'claude setup-token'):"
-      );
-      const token = await ask("Token (sk-ant-oat01-...): ");
-      if (token.trim().startsWith("sk-ant-")) {
-        claudeTokenToStore = token.trim();
-      } else {
-        console.log("Invalid token format. Skipping Claude Code warmup.");
-      }
-    }
-  }
-
-  const enableCodex = await askYesNo(
-    "Enable Codex CLI warmup?",
-    codexToken !== null
-  );
-
-  let codexTokenToStore: string | null = null;
-  if (enableCodex) {
-    if (codexToken) {
-      const confirm = await askYesNo("Store detected token in OS Keychain?", true);
-      if (confirm) codexTokenToStore = codexToken;
-    } else {
-      console.log(
-        "\nPlease provide your OpenAI API key (from platform.openai.com/api-keys):"
-      );
-      const token = await ask("API Key (sk-...): ");
-      if (token.trim().startsWith("sk-")) {
-        codexTokenToStore = token.trim();
-      } else {
-        console.log("Invalid token format. Skipping Codex CLI warmup.");
-      }
-    }
-  }
+  const enableClaude = claudeDetected && await askYesNo("Enable Claude Code warmup?", true);
+  const enableCodex = codexDetected && await askYesNo("Enable Codex CLI warmup?", true);
 
   const defaultTime = cfg.scheduleTime || "06:00";
   const timeAnswer = await ask(`Schedule time [${defaultTime}]: `);
@@ -160,26 +87,16 @@ async function init(): Promise<void> {
     }
   }
 
-  if (claudeTokenToStore) {
-    await storeToken("claude", claudeTokenToStore);
-    console.log("✓ Claude Code token stored in OS Keychain");
-  }
-
-  if (codexTokenToStore) {
-    await storeToken("codex", codexTokenToStore);
-    console.log("✓ Codex CLI token stored in OS Keychain");
-  }
-
   const newConfig: WarmyConfig = {
     ...cfg,
     scheduleTime,
-    claudeEnabled: enableClaude && claudeTokenToStore !== null,
-    codexEnabled: enableCodex && codexTokenToStore !== null,
+    claudeEnabled: enableClaude,
+    codexEnabled: enableCodex,
     lastWarmupAt: {
       claude: null,
       codex: null,
     },
-    warmupIntervalSeconds: 4 * 60 + 59,
+    warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
   };
 
   await saveConfig(newConfig);
@@ -187,7 +104,8 @@ async function init(): Promise<void> {
   console.log("\n=== Installing scheduler ===\n");
 
   try {
-    await installScheduler(process.argv[1] || "warmy");
+    const warmyPath = process.argv[1] || fileURLToPath(import.meta.url);
+    await installScheduler(warmyPath);
     console.log("✓ Scheduler installed (runs every 5 minutes)\n");
   } catch (err) {
     console.error(`✗ Failed to install scheduler: ${err instanceof Error ? err.message : String(err)}`);
@@ -205,66 +123,54 @@ async function init(): Promise<void> {
 async function runWarmup(): Promise<void> {
   const config = await loadConfig();
   const timestamp = new Date().toISOString();
-  const interval = config.warmupIntervalSeconds;
+  const interval = WARMUP_INTERVAL_SECONDS;
+  const nowMs = Date.now();
 
-  let needsClaudeWarmup = config.claudeEnabled &&
-    shouldWarmup(config.lastWarmupAt.claude, interval);
-  let needsCodexWarmup = config.codexEnabled &&
-    shouldWarmup(config.lastWarmupAt.codex, interval);
+  async function doWarmup(
+    label: string,
+    provider: "claude" | "codex",
+    warmupFn: (msg: string) => WarmupResult,
+    getLastActivity: () => number | null
+  ) {
+    if (!config.claudeEnabled && provider === "claude") {
+      console.log(`○ ${label}: disabled`);
+      return;
+    }
+    if (!config.codexEnabled && provider === "codex") {
+      console.log(`○ ${label}: disabled`);
+      return;
+    }
 
-  if (config.claudeEnabled && needsClaudeWarmup) {
-    const token = await getToken("claude");
-    if (token) {
-      console.log("Warming up Claude Code...");
-      const result = await warmupAnthropic(token);
+    const lastActivity = getLastActivity();
+    const lastWarmup = config.lastWarmupAt[provider]
+      ? new Date(config.lastWarmupAt[provider]!).getTime()
+      : 0;
+    const lastInteraction = Math.max(lastActivity || 0, lastWarmup);
+    const needsWarmup = lastInteraction === 0 || (nowMs - lastInteraction) / 1000 >= interval;
+
+    if (needsWarmup) {
+      console.log(`Warming up ${label}...`);
+      const result = warmupFn(config.warmupMessage);
       if (result.success) {
-        console.log(`✓ Claude Code warmup succeeded: "${result.reply}"`);
-        config.lastWarmupAt.claude = timestamp;
+        console.log(`✓ ${label} warmup succeeded: "${result.reply}"`);
+        config.lastWarmupAt[provider] = timestamp;
       } else {
-        console.error(`✗ Claude Code warmup failed: ${result.error}`);
+        console.error(`✗ ${label} warmup failed: ${result.error}`);
       }
-      config.lastResult.claude = {
+      config.lastResult[provider] = {
         success: result.success,
         timestamp,
       };
     } else {
-      console.warn("⚠ Claude Code enabled but no token found in Keychain");
+      const next = lastInteraction > 0
+        ? new Date(lastInteraction + interval * 1000).toISOString()
+        : "now";
+      console.log(`○ ${label}: next warmup at ${next}`);
     }
-  } else if (config.claudeEnabled) {
-    const next = config.lastWarmupAt.claude
-      ? new Date(new Date(config.lastWarmupAt.claude).getTime() + interval * 1000).toISOString()
-      : "now";
-    console.log(`○ Claude Code: next warmup at ${next}`);
-  } else {
-    console.log("○ Claude Code: disabled");
   }
 
-  if (config.codexEnabled && needsCodexWarmup) {
-    const token = await getToken("codex");
-    if (token) {
-      console.log("Warming up Codex CLI...");
-      const result = await warmupOpenAI(token);
-      if (result.success) {
-        console.log(`✓ Codex CLI warmup succeeded: "${result.reply}"`);
-        config.lastWarmupAt.codex = timestamp;
-      } else {
-        console.error(`✗ Codex CLI warmup failed: ${result.error}`);
-      }
-      config.lastResult.codex = {
-        success: result.success,
-        timestamp,
-      };
-    } else {
-      console.warn("⚠ Codex CLI enabled but no token found in Keychain");
-    }
-  } else if (config.codexEnabled) {
-    const next = config.lastWarmupAt.codex
-      ? new Date(new Date(config.lastWarmupAt.codex).getTime() + interval * 1000).toISOString()
-      : "now";
-    console.log(`○ Codex CLI: next warmup at ${next}`);
-  } else {
-    console.log("○ Codex CLI: disabled");
-  }
+  await doWarmup("Claude Code", "claude", warmupClaude, getLastClaudeActivity);
+  await doWarmup("Codex CLI", "codex", warmupCodex, getLastCodexActivity);
 
   config.lastRun = timestamp;
   await saveConfig(config);
@@ -278,17 +184,21 @@ async function status(): Promise<void> {
   console.log("=== Warmy Status ===\n");
   console.log(`Config file: ${configPath} ${existsSync(configPath) ? "✓" : "(not found)"}`);
   console.log(`Scheduler:   ${installed ? "✓ installed (every 5 min)" : "✗ not installed"}`);
-  console.log(`Warmup interval: ${config.warmupIntervalSeconds}s before 5hr window expires`);
+  const hours = Math.floor(WARMUP_INTERVAL_SECONDS / 3600);
+  const mins = Math.floor((WARMUP_INTERVAL_SECONDS % 3600) / 60);
+  const intervalLabel = mins > 0 ? `${hours}hr ${mins}min` : `${hours}hr`;
+  console.log(`Warmup interval: ${intervalLabel} after last activity`);
   console.log(`Claude Code: ${config.claudeEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Codex CLI:   ${config.codexEnabled ? "✓ enabled" : "✗ disabled"}`);
+  console.log(`Message:     "${config.warmupMessage}"`);
 
   if (config.lastWarmupAt.claude) {
-    const next = new Date(new Date(config.lastWarmupAt.claude).getTime() + config.warmupIntervalSeconds * 1000).toISOString();
+    const next = new Date(new Date(config.lastWarmupAt.claude).getTime() + WARMUP_INTERVAL_SECONDS * 1000).toISOString();
     console.log(`\nClaude next: ${next}`);
   }
 
   if (config.lastWarmupAt.codex) {
-    const next = new Date(new Date(config.lastWarmupAt.codex).getTime() + config.warmupIntervalSeconds * 1000).toISOString();
+    const next = new Date(new Date(config.lastWarmupAt.codex).getTime() + WARMUP_INTERVAL_SECONDS * 1000).toISOString();
     console.log(`Codex next:  ${next}`);
   }
 
@@ -310,22 +220,37 @@ async function status(): Promise<void> {
 async function uninstall(): Promise<void> {
   console.log("=== Uninstalling Warmy ===\n");
 
-  await uninstallScheduler();
+  let schedulerOk = false;
+  let tokensOk = false;
+  let configOk = false;
 
-  await removeToken("claude");
-  await removeToken("codex");
+  try {
+    await uninstallScheduler();
+    schedulerOk = true;
+  } catch (err) {
+    console.error(`Failed to remove scheduler: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    await removeToken("claude");
+    await removeToken("codex");
+    tokensOk = true;
+  } catch (err) {
+    console.error(`Failed to remove tokens: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const configPath = getConfigPath();
   const { rm } = await import("fs/promises");
   try {
     await rm(configPath, { force: true });
-  } catch {
-    // ignore
+    configOk = true;
+  } catch (err) {
+    console.error(`Failed to remove config: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  console.log("✓ Scheduler removed");
-  console.log("✓ Tokens removed from Keychain");
-  console.log("✓ Config file removed");
+  if (schedulerOk) console.log("✓ Scheduler removed");
+  if (tokensOk) console.log("✓ Tokens removed from Keychain");
+  if (configOk) console.log("✓ Config file removed");
   console.log("\nWarmy uninstall complete.");
 }
 
@@ -349,7 +274,8 @@ async function configEdit(): Promise<void> {
       codexEnabled: false,
       lastRun: null,
       lastWarmupAt: { claude: null, codex: null },
-      warmupIntervalSeconds: 4 * 60 + 59,
+      warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
+      warmupMessage: "Hello Claude. Howdy?",
       lastResult: { claude: null, codex: null },
     });
   }
@@ -362,6 +288,18 @@ async function configEdit(): Promise<void> {
   }
 }
 
+async function setMessage(message: string): Promise<void> {
+  if (!message) {
+    console.error("Usage: warmy set-message <your warmup message>");
+    return;
+  }
+
+  const config = await loadConfig();
+  config.warmupMessage = message;
+  await saveConfig(config);
+  console.log(`✓ Warmup message set to: "${message}"`);
+}
+
 program.name("warmy").description("Warm up Claude Code and Codex CLI rate limit windows");
 
 program.command("init").description("Interactive setup").action(init);
@@ -372,6 +310,11 @@ program.command("status").description("Show status").action(status);
 
 program.command("uninstall").description("Remove scheduler and config").action(uninstall);
 
-program.command("config").description("Edit config file").action(configEdit);
+program.command("edit-config").description("Edit config file").action(configEdit);
+
+program.command("set-message")
+  .description("Set a custom warmup message")
+  .argument("<message>", "The message to send during warmup")
+  .action(setMessage);
 
 program.parse();
