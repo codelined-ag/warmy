@@ -1,3 +1,5 @@
+![Warmy](warmy.png)
+
 # Warmy 🔥
 
 **Keep your Claude Code and Codex CLI sessions warm — automatically.**
