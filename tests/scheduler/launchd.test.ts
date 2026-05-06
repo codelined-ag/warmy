@@ -59,7 +59,7 @@ describe("launchd", () => {
       await installLaunchd("/usr/local/bin/warmy");
 
       const plistContent = vi.mocked(writeFile).mock.calls[0][1] as string;
-      expect(plistContent).toContain("<integer>300</integer>");
+      expect(plistContent).toContain("<integer>18060</integer>");
     });
 
     it("should include warmy path in ProgramArguments", async () => {

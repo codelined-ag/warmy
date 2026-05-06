@@ -50,7 +50,7 @@ describe("cron", () => {
 
     it("should remove existing warmy entries before adding", async () => {
       vi.mocked(execSync)
-        .mockReturnValueOnce("0 6 * * * /usr/local/bin/warmy run\n0 * * * * other")
+        .mockReturnValueOnce("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1\n0 * * * * other")
         .mockReturnValueOnce("");
 
       const { installCron } = await import(CRON_SRC_PATH);
@@ -67,7 +67,7 @@ describe("cron", () => {
   describe("uninstallCron", () => {
     it("should remove warmy entry from crontab", async () => {
       vi.mocked(execSync)
-        .mockReturnValueOnce("0 6 * * * /usr/local/bin/warmy run\n0 * * * * other")
+        .mockReturnValueOnce("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1\n0 * * * * other")
         .mockReturnValueOnce("");
 
       const { uninstallCron } = await import(CRON_SRC_PATH);
@@ -79,7 +79,7 @@ describe("cron", () => {
 
   describe("isCronInstalled", () => {
     it("should return true when warmy entry exists", async () => {
-      vi.mocked(execSync).mockReturnValue("0 6 * * * /usr/local/bin/warmy run");
+      vi.mocked(execSync).mockReturnValue("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1");
 
       const { isCronInstalled } = await import(CRON_SRC_PATH);
       const result = await isCronInstalled();
