@@ -25,11 +25,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/slayense/warmy.git"
+    "url": "git+https://github.com/codelined-ag/warmy.git"
   },
-  "homepage": "https://github.com/slayense/warmy#readme",
+  "homepage": "https://github.com/codelined-ag/warmy#readme",
   "bugs": {
-    "url": "https://github.com/slayense/warmy/issues"
+    "url": "https://github.com/codelined-ag/warmy/issues"
   },
   "engines": {
     "node": ">=18.0.0"

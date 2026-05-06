@@ -51,8 +51,8 @@ program.command("set-message")
 
 program.addHelpText("afterAll", `
   ──────────────────────────────────────────────
-  📖  Readme:  https://github.com/slayense/warmy
-  ⚠️  Issues:  https://github.com/slayense/warmy/issues
+  📖  Readme:  https://github.com/codelined-ag/warmy
+  ⚠️  Issues:  https://github.com/codelined-ag/warmy/issues
 
   The 5-hour window starts from your first API request.
   Warmy sends a message 1 minute after it expires,
