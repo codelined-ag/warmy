@@ -2,4 +2,6 @@ node_modules/
 dist/
 *.log
 .env
-.DS_Store.desloppify/
+.DS_Store
+.desloppify/
+scorecard.png
