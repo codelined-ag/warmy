@@ -207,8 +207,6 @@ async function runWarmup(): Promise<void> {
   const timestamp = new Date().toISOString();
   const interval = config.warmupIntervalSeconds;
 
-  console.log(`[${timestamp}] Warmy starting...\n`);
-
   let needsClaudeWarmup = config.claudeEnabled &&
     shouldWarmup(config.lastWarmupAt.claude, interval);
   let needsCodexWarmup = config.codexEnabled &&
