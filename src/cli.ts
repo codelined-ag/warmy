@@ -317,4 +317,8 @@ program.command("set-message")
   .argument("<message>", "The message to send during warmup")
   .action(setMessage);
 
-program.parse();
+export { init, runWarmup, status, uninstall, configEdit as editConfig, setMessage };
+
+if (process.argv[1]?.endsWith("cli.js") || process.argv[1]?.endsWith("warmy")) {
+  program.parse();
+}
