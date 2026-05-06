@@ -12,10 +12,6 @@ Claude Code and Codex CLI use a **rolling 5-hour rate limit window**. The clock 
 
 If you were actively using the tool within 10 minutes before the window would reset, Warmy skips the ping (your own usage already refreshed it).
 
-## Scorecard
-
-![Scorecard](scorecard.png)
-
 ## Installation
 
 ```bash
@@ -76,3 +72,9 @@ The scheduler runs Warmy every 5 minutes to check the window and fire if needed.
 - Node.js 18+
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and/or [Codex CLI](https://github.com/openai/codex) installed and authenticated
 - macOS (launchd) or Linux (cron) for scheduled mode
+
+---
+
+## Quality metrics
+
+![Desloppify Scorecard](scorecard.png)
