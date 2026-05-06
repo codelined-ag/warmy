@@ -1,6 +1,6 @@
 {
   "name": "@codelined/warmy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Keep your Claude Code and Codex CLI sessions warm — automatically. Sends periodic pings via the Anthropic API to reset the 5-hour rate limit window before it expires.",
   "type": "module",
   "bin": {
@@ -20,7 +20,15 @@
     "lint": "eslint src --ext .ts",
     "prepublishOnly": "npm run build && npm test"
   },
-  "keywords": ["claude", "codex", "warmup", "rate-limit", "cli", "anthropic", "openai"],
+  "keywords": [
+    "claude",
+    "codex",
+    "warmup",
+    "rate-limit",
+    "cli",
+    "anthropic",
+    "openai"
+  ],
   "author": "",
   "license": "MIT",
   "repository": {
