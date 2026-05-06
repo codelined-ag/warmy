@@ -15,7 +15,7 @@ If you were actively using the tool within 10 minutes before the window would re
 ## Installation
 
 ```bash
-npm install -g warmy
+npm install -g @codelined/warmy
 ```
 
 ## Quick start
