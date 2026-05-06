@@ -12,7 +12,7 @@ export async function runWarmup(): Promise<void> {
   async function doWarmup(
     label: string,
     provider: "claude" | "codex",
-    warmupFn: (msg: string) => WarmupResult,
+    warmupFn: (msg: string) => WarmupResult | Promise<WarmupResult>,
     getNextWarmup: () => number | null
   ) {
     if ((!config.claudeEnabled && provider === "claude") ||
@@ -30,7 +30,7 @@ export async function runWarmup(): Promise<void> {
 
     if (nextWarmup <= nowMs) {
       console.log(`Warming up ${label}...`);
-      const result = warmupFn(config.warmupMessage);
+      const result = await warmupFn(config.warmupMessage);
       if (result.success) {
         console.log(`✓ ${label} warmup succeeded: "${result.reply}"`);
         config.lastWarmupAt[provider] = timestamp;

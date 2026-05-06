@@ -17,7 +17,7 @@ const SESSION_PATH = `${PROJECT_ROOT}/dist/detectors/session.js`;
 describe("getNextClaudeWarmup", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("should return Date.now() when sessions dir missing", async () => {
+  it("should return 0 when sessions dir missing", async () => {
     const { existsSync } = await import("fs");
     vi.mocked(existsSync).mockImplementation((p: string) => {
       if (p.toString().includes("history.jsonl")) return false;
@@ -25,33 +25,27 @@ describe("getNextClaudeWarmup", () => {
     });
 
     const { getNextClaudeWarmup } = await import(SESSION_PATH);
-    const result = getNextClaudeWarmup();
-    expect(result).not.toBeNull();
-    expect(Math.abs(result! - Date.now())).toBeLessThan(5000);
+    expect(getNextClaudeWarmup()).toBe(0);
   });
 
-  it("should return Date.now() when history file empty", async () => {
+  it("should return 0 when history file empty", async () => {
     const { existsSync, readFileSync } = await import("fs");
     vi.mocked(existsSync).mockReturnValue(true);
     vi.mocked(readFileSync).mockReturnValue("");
 
     const { getNextClaudeWarmup } = await import(SESSION_PATH);
-    const result = getNextClaudeWarmup();
-    expect(result).not.toBeNull();
-    expect(Math.abs(result! - Date.now())).toBeLessThan(5000);
+    expect(getNextClaudeWarmup()).toBe(0);
   });
 });
 
 describe("getNextCodexWarmup", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("should return Date.now() when db missing", async () => {
+  it("should return 0 when db missing", async () => {
     const { existsSync } = await import("fs");
     vi.mocked(existsSync).mockReturnValue(false);
 
     const { getNextCodexWarmup } = await import(SESSION_PATH);
-    const result = getNextCodexWarmup();
-    expect(result).not.toBeNull();
-    expect(Math.abs(result! - Date.now())).toBeLessThan(5000);
+    expect(getNextCodexWarmup()).toBe(0);
   });
 });

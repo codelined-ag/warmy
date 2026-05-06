@@ -1,14 +1,60 @@
-import { execSync } from "child_process";
 import { type WarmupResult } from "./types.js";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 
-export function warmupClaude(message: string): WarmupResult {
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+
+function getOAuthToken(): string | null {
   try {
-    const reply = execSync(`claude -p ${JSON.stringify(message)} --print`, {
-      encoding: "utf-8",
-      timeout: 60_000,
-      stdio: ["pipe", "pipe", "pipe"],
-    }).trim();
-    return { success: true, reply: reply || "(empty)", error: null };
+    const creds = JSON.parse(
+      readFileSync(join(homedir(), ".claude", ".credentials.json"), "utf-8")
+    );
+    const token = creds?.claudeAiOauth?.accessToken;
+    if (typeof token === "string" && token.startsWith("sk-ant-oat")) return token;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function warmupClaude(message: string): Promise<WarmupResult> {
+  const token = getOAuthToken();
+  if (!token) {
+    return { success: false, reply: null, error: "No Claude Code OAuth token found" };
+  }
+
+  try {
+    const response = await fetch(ANTHROPIC_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "claude-code-20250219,oauth-2025-04-20",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 64,
+        messages: [{ role: "user", content: message }],
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      return {
+        success: false,
+        reply: null,
+        error: `Anthropic API error: ${response.status} ${response.statusText} — ${text}`,
+      };
+    }
+
+    const data = (await response.json()) as {
+      content: Array<{ type: string; text: string }>;
+    };
+
+    const textBlock = data.content?.find((b) => b.type === "text");
+    return { success: true, reply: textBlock?.text ?? "(no text)", error: null };
   } catch (err) {
     return {
       success: false,
