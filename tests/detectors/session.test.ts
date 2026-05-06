@@ -5,7 +5,11 @@ vi.mock("fs", async () => {
   return { ...actual, readFileSync: vi.fn(), readdirSync: vi.fn(), existsSync: vi.fn() };
 });
 
-vi.mock("child_process", () => ({ execSync: vi.fn() }));
+vi.mock("child_process", () => {
+  const mockExec = vi.fn();
+  mockExec.mockImplementation(() => { throw new Error("not found"); });
+  return { execSync: mockExec };
+});
 
 const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
 const SESSION_PATH = `${PROJECT_ROOT}/dist/detectors/session.js`;
@@ -82,7 +86,9 @@ describe("getLastCodexActivity", () => {
     const { existsSync } = await import("fs");
     const { execSync } = await import("child_process");
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(execSync).mockReturnValue("1700000000");
+    vi.mocked(execSync)
+      .mockImplementationOnce(() => { throw new Error("not found"); })
+      .mockReturnValueOnce("1700000000");
 
     const { getLastCodexActivity } = await import(SESSION_PATH);
     expect(getLastCodexActivity()).toBe(1700000000000);
@@ -92,7 +98,9 @@ describe("getLastCodexActivity", () => {
     const { existsSync } = await import("fs");
     const { execSync } = await import("child_process");
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(execSync).mockReturnValue("");
+    vi.mocked(execSync)
+      .mockImplementationOnce(() => { throw new Error("not found"); })
+      .mockReturnValueOnce("");
 
     const { getLastCodexActivity } = await import(SESSION_PATH);
     expect(getLastCodexActivity()).toBeNull();
@@ -102,7 +110,9 @@ describe("getLastCodexActivity", () => {
     const { existsSync } = await import("fs");
     const { execSync } = await import("child_process");
     vi.mocked(existsSync).mockReturnValue(true);
-    vi.mocked(execSync).mockImplementation(() => { throw new Error("sqlite failed"); });
+    vi.mocked(execSync)
+      .mockImplementationOnce(() => { throw new Error("not found"); })
+      .mockImplementationOnce(() => { throw new Error("sqlite failed"); });
 
     const { getLastCodexActivity } = await import(SESSION_PATH);
     expect(getLastCodexActivity()).toBeNull();

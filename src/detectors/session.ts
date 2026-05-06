@@ -4,7 +4,21 @@ import { homedir } from "os";
 import { execSync } from "child_process";
 
 interface SessionFile {
+  pid?: number;
   updatedAt?: number;
+}
+
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getNow(): number {
+  return Date.now();
 }
 
 export function getLastClaudeActivity(): number | null {
@@ -15,12 +29,17 @@ export function getLastClaudeActivity(): number | null {
     const files = readdirSync(sessionsDir).filter((f) => f.endsWith(".json"));
     if (files.length === 0) return null;
 
+    const now = getNow();
     let latest = 0;
+
     for (const file of files) {
       try {
         const data: SessionFile = JSON.parse(
           readFileSync(join(sessionsDir, file), "utf-8")
         );
+        if (data.pid && isProcessRunning(data.pid)) {
+          return now;
+        }
         if (data.updatedAt && data.updatedAt > latest) {
           latest = data.updatedAt;
         }
@@ -37,6 +56,12 @@ export function getLastCodexActivity(): number | null {
   try {
     const dbPath = join(homedir(), ".codex", "logs_1.sqlite");
     if (!existsSync(dbPath)) return null;
+
+    try {
+      execSync("pgrep -x codex", { stdio: "pipe" });
+      return getNow();
+    } catch {
+    }
 
     const result = execSync(
       `sqlite3 ${JSON.stringify(dbPath)} "SELECT MAX(ts) FROM logs"`,
