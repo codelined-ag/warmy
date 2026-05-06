@@ -3,9 +3,9 @@ import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { existsSync } from "fs";
+import { WARMUP_INTERVAL_SECONDS } from "../warmup/types.js";
 
 const PLIST_NAME = "com.warmy.warmy.plist";
-const WARMUP_INTERVAL_SECONDS = 5 * 60; // 5 minutes
 
 function escapeXml(str: string): string {
   return str
@@ -86,16 +86,14 @@ export async function uninstallLaunchd(): Promise<void> {
   try {
     execSync(`launchctl unload -w "${plistPath}"`, { stdio: "pipe" });
   } catch {
-    // ignore if not loaded
   }
 
   try {
     await rm(plistPath, { force: true });
   } catch {
-    // ignore if not found
   }
 }
 
-export async function isLaunchdInstalled(): Promise<boolean> {
-  return existsSync(join(homedir(), "Library", "LaunchAgents", PLIST_NAME));
+export function isLaunchdInstalled(): Promise<boolean> {
+  return Promise.resolve(existsSync(join(homedir(), "Library", "LaunchAgents", PLIST_NAME)));
 }

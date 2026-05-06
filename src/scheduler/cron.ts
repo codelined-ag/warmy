@@ -27,7 +27,7 @@ export async function installCron(
   }
 
   const lines = existingCrons.split("\n").filter((line) => {
-    return line.trim() !== "" && !line.includes("warmy run");
+    return line.trim() !== "" && !line.includes("/tmp/warmy.log");
   });
 
   lines.push(cronJob);
@@ -40,7 +40,7 @@ export async function installCron(
   execSync(`crontab "${tmpFile}"`, { stdio: "pipe" });
 }
 
-export async function uninstallCron(): Promise<void> {
+export function uninstallCron(): Promise<void> {
   try {
     const existingCrons = execSync("crontab -l 2>/dev/null", {
       encoding: "utf-8",
@@ -53,19 +53,20 @@ export async function uninstallCron(): Promise<void> {
 
     const newCrontab = lines.join("\n") + "\n";
     execSync(`echo "${newCrontab}" | crontab -`, { stdio: "pipe" });
+    return Promise.resolve();
   } catch {
-    throw new Error("Failed to uninstall cron job");
+    return Promise.reject(new Error("Failed to uninstall cron job"));
   }
 }
 
-export async function isCronInstalled(): Promise<boolean> {
+export function isCronInstalled(): Promise<boolean> {
   try {
     const crons = execSync("crontab -l 2>/dev/null", {
       encoding: "utf-8",
       stdio: "pipe",
     });
-    return crons.includes("warmy run");
+    return Promise.resolve(crons.includes("run >> /tmp/warmy.log"));
   } catch {
-    return false;
+    return Promise.resolve(false);
   }
 }

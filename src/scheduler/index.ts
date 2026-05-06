@@ -30,9 +30,9 @@ export async function isSchedulerInstalled(): Promise<boolean> {
   const platform = getPlatform();
 
   if (platform === "macos") {
-    return launchd.isLaunchdInstalled();
+    return await launchd.isLaunchdInstalled();
   } else if (platform === "linux") {
-    return cron.isCronInstalled();
+    return await cron.isCronInstalled();
   }
-  return false;
+  throw new Error("Windows scheduler not implemented yet");
 }
