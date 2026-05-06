@@ -1,8 +1,8 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { homedir, platform } from "os";
-import { existsSync } from "fs";
-import { renameSync, unlinkSync } from "fs";
+import { existsSync, renameSync, unlinkSync } from "fs";
+import { WARMUP_INTERVAL_SECONDS } from "./warmup/types.js";
 
 export interface WarmyConfig {
   scheduleTime: string;
@@ -14,6 +14,7 @@ export interface WarmyConfig {
     codex: string | null;
   };
   warmupIntervalSeconds: number;
+  warmupMessage: string;
   lastResult: {
     claude: { success: boolean; timestamp: string } | null;
     codex: { success: boolean; timestamp: string } | null;
@@ -29,7 +30,8 @@ const DEFAULT_CONFIG: WarmyConfig = {
     claude: null,
     codex: null,
   },
-  warmupIntervalSeconds: 4 * 60 + 59,
+  warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
+  warmupMessage: "Hello Claude. Howdy?",
   lastResult: {
     claude: null,
     codex: null,
@@ -74,7 +76,6 @@ export async function saveConfig(config: WarmyConfig): Promise<void> {
   try {
     unlinkSync(configPath);
   } catch {
-    // ignore if doesn't exist
   }
   renameSync(tmpPath, configPath);
 }
