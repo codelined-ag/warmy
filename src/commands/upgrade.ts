@@ -1,12 +1,21 @@
 import { spawnSync, execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, realpathSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const PACKAGE_NAME = "@codelined/warmy";
 
+function entryPath(): string {
+  const arg = process.argv[1] || "";
+  try {
+    return realpathSync(arg);
+  } catch {
+    return arg;
+  }
+}
+
 function findInstallRoot(): string | null {
-  let dir = dirname(process.argv[1] || "");
+  let dir = dirname(entryPath());
   while (dir && dir !== "/") {
     const pkgPath = join(dir, "package.json");
     if (existsSync(pkgPath)) {
@@ -26,7 +35,7 @@ function findInstallRoot(): string | null {
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun" | "volta";
 
 function detectPackageManager(): PackageManager {
-  const fullPath = (process.argv[1] || "") + " " + (findInstallRoot() || "");
+  const fullPath = entryPath() + " " + (findInstallRoot() || "");
   if (/\/\.bun\b|\/bun\/install\b/.test(fullPath)) return "bun";
   if (/\/\.volta\//.test(fullPath)) return "volta";
   if (/\/pnpm\/|\/\.pnpm\//.test(fullPath)) return "pnpm";
@@ -65,15 +74,26 @@ function parseFlags(argv: string[]): { noRestart: boolean } {
 async function maybeRestartDaemon(noRestart: boolean): Promise<void> {
   if (noRestart) {
     console.log("\nSkipping daemon restart (--no-restart). Restart manually with:");
-    console.log("  warmy stop-daemon && warmy start-daemon");
+    console.log("  warmy restart-daemon");
     return;
   }
 
   const daemonMod = await import("../daemon.js");
-  const { isDaemonRunning, readDaemonPid, startDaemonDetached, clearStoppedMarker } = daemonMod;
+  const {
+    isDaemonRunning,
+    isDaemonStopped,
+    readDaemonPid,
+    safeKillWarmyDaemon,
+    startDaemonDetached,
+    clearStoppedMarker,
+  } = daemonMod;
 
   if (!(await isDaemonRunning())) {
-    console.log("\nDaemon was not running. Run 'warmy ensure-daemon' to start it.");
+    if (isDaemonStopped()) {
+      console.log("\nDaemon is stopped. Run 'warmy start-daemon' to start with the new version.");
+    } else {
+      console.log("\nDaemon was not running. Run 'warmy ensure-daemon' to start it.");
+    }
     return;
   }
 
@@ -81,10 +101,8 @@ async function maybeRestartDaemon(noRestart: boolean): Promise<void> {
   if (pid === null) return;
 
   console.log(`\nRestarting daemon (pid ${pid})...`);
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch (err) {
-    console.error(`Failed to send SIGTERM: ${err instanceof Error ? err.message : String(err)}`);
+  if (!safeKillWarmyDaemon(pid, "SIGTERM")) {
+    console.error(`Failed to send SIGTERM. Run 'warmy restart-daemon' manually.`);
     return;
   }
 
@@ -94,18 +112,18 @@ async function maybeRestartDaemon(noRestart: boolean): Promise<void> {
     await new Promise((r) => setTimeout(r, 100));
   }
   if (await isDaemonRunning()) {
-    try { process.kill(pid, "SIGKILL"); } catch {}
+    safeKillWarmyDaemon(pid, "SIGKILL");
   }
 
   clearStoppedMarker();
 
-  const warmyPath = process.argv[1] || fileURLToPath(import.meta.url);
+  const warmyPath = entryPath() || fileURLToPath(import.meta.url);
   try {
     const newPid = await startDaemonDetached(warmyPath);
     console.log(`✓ Daemon restarted (pid ${newPid}).`);
   } catch (err) {
     console.error(`Failed to restart daemon: ${err instanceof Error ? err.message : String(err)}`);
-    console.error("Run 'warmy ensure-daemon' manually.");
+    console.error("Run 'warmy restart-daemon' manually.");
   }
 }
 

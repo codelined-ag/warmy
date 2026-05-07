@@ -1,7 +1,7 @@
 import { getConfigPath, getWarmyDir } from "../config.js";
 import { uninstallScheduler } from "../scheduler/index.js";
 import { removeToken } from "../keyring.js";
-import { isDaemonRunning, readDaemonPid, getPidFilePath, getDaemonLogPath, getStoppedMarkerPath } from "../daemon.js";
+import { isDaemonRunning, readDaemonPid, getPidFilePath, getDaemonLogPath, getStoppedMarkerPath, safeKillWarmyDaemon, verifyDaemonOwnership } from "../daemon.js";
 import { join } from "path";
 
 async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
@@ -33,17 +33,17 @@ export async function uninstall(): Promise<void> {
   if (await isDaemonRunning()) {
     const pid = await readDaemonPid();
     daemonOk = false;
-    if (pid !== null) {
-      try {
-        process.kill(pid, "SIGTERM");
+    if (pid !== null && verifyDaemonOwnership(pid)) {
+      if (safeKillWarmyDaemon(pid, "SIGTERM")) {
         const exited = await waitForExit(pid, 3000);
-        if (!exited) {
-          try { process.kill(pid, "SIGKILL"); } catch {}
-        }
+        if (!exited) safeKillWarmyDaemon(pid, "SIGKILL");
         daemonOk = true;
-      } catch (err) {
-        console.error(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
+      } else {
+        console.error("Failed to send SIGTERM to daemon");
       }
+    } else {
+      console.error("PID file does not match a running warmy daemon; skipping kill");
+      daemonOk = true;
     }
   }
 

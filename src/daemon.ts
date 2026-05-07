@@ -75,7 +75,12 @@ export async function readDaemonPid(): Promise<number | null> {
   return record?.pid ?? null;
 }
 
-async function readDaemonRecord(): Promise<PidRecord | null> {
+export async function readDaemonStartedAt(): Promise<string | null> {
+  const record = await readDaemonRecord();
+  return record?.startedAt || null;
+}
+
+export async function readDaemonRecord(): Promise<PidRecord | null> {
   const pidFile = getPidFilePath();
   if (!existsSync(pidFile)) return null;
   try {
@@ -104,7 +109,18 @@ export async function isDaemonRunning(): Promise<boolean> {
 }
 
 export function isDaemonStopped(): boolean {
-  return existsSync(getStoppedMarkerPath());
+  const path = getStoppedMarkerPath();
+  if (!existsSync(path)) return false;
+  try {
+    const lst = lstatSync(path);
+    if (lst.isSymbolicLink()) return false;
+    if (typeof process.geteuid === "function" && lst.uid !== process.geteuid()) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function setStoppedMarker(): void {
@@ -114,13 +130,21 @@ export function setStoppedMarker(): void {
     return;
   }
   const path = getStoppedMarkerPath();
+  try { unlinkSync(path); } catch {}
+  const flags =
+    fsConstants.O_WRONLY |
+    fsConstants.O_CREAT |
+    fsConstants.O_EXCL |
+    fsConstants.O_NOFOLLOW;
   try {
-    if (existsSync(path) && lstatSync(path).isSymbolicLink()) {
-      unlinkSync(path);
+    const fd = openSync(path, flags, 0o600);
+    try {
+      writeSync(fd, new Date().toISOString());
+    } finally {
+      closeSync(fd);
     }
   } catch {
   }
-  writeFileSync(path, new Date().toISOString(), { mode: 0o600 });
 }
 
 export function clearStoppedMarker(): void {
@@ -150,17 +174,40 @@ function ensureSafeWarmyDir(): string {
   }
   const lst = lstatSync(dir);
   if (lst.isSymbolicLink()) {
-    throw new Error(`Refusing to use ${dir}: it is a symlink`);
+    throw new Error(`Refusing to use ${dir}: it is a symlink. Inspect the path and remove it.`);
   }
   if (typeof process.geteuid === "function" && lst.uid !== process.geteuid()) {
-    throw new Error(`Refusing to use ${dir}: owner uid ${lst.uid} != ours ${process.geteuid()}`);
+    throw new Error(
+      `Refusing to use ${dir}: owner uid ${lst.uid} != ours ${process.geteuid()}. ` +
+      `If you ran warmy with sudo by mistake, fix with: sudo chown -R $USER ${dir}`
+    );
   }
   return dir;
+}
+
+export function verifyDaemonOwnership(pid: number): boolean {
+  const record = readRecordSync();
+  if (!record) return false;
+  if (record.pid !== pid) return false;
+  if (record.tag !== DAEMON_OWNER_TAG) return false;
+  return isProcessAlive(pid);
+}
+
+export function safeKillWarmyDaemon(pid: number, signal: NodeJS.Signals | number): boolean {
+  if (!verifyDaemonOwnership(pid)) return false;
+  try {
+    process.kill(pid, signal);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function openNoFollow(path: string, flags: number, mode: number): number {
   return openSync(path, flags | fsConstants.O_NOFOLLOW, mode);
 }
+
+const LOG_ROTATION_KEEP = 3;
 
 function rotateDaemonLogIfLarge(): void {
   const logPath = getDaemonLogPath();
@@ -171,10 +218,14 @@ function rotateDaemonLogIfLarge(): void {
       unlinkSync(logPath);
       return;
     }
-    if (lst.size >= MAX_LOG_BYTES) {
-      const rotated = `${logPath}.1`;
-      try { unlinkSync(rotated); } catch {}
-      renameSync(logPath, rotated);
+    if (lst.size < MAX_LOG_BYTES) return;
+
+    for (let i = LOG_ROTATION_KEEP; i >= 1; i--) {
+      const src = i === 1 ? logPath : `${logPath}.${i - 1}`;
+      const dst = `${logPath}.${i}`;
+      if (!existsSync(src)) continue;
+      try { unlinkSync(dst); } catch {}
+      try { renameSync(src, dst); } catch {}
     }
   } catch {
   }
@@ -282,15 +333,6 @@ export async function runDaemonLoop(pollIntervalSeconds: number): Promise<void> 
 
   const interval = Math.max(5, pollIntervalSeconds) * 1000;
   const { runWarmup } = await import("./commands/run.js");
-  const { loadConfig, saveConfig } = await import("./config.js");
-
-  try {
-    const cfg = await loadConfig();
-    cfg.stats.daemonStartedAt = new Date().toISOString();
-    await saveConfig(cfg);
-  } catch (err) {
-    console.error(`[warmy] could not record daemon start: ${err instanceof Error ? err.message : String(err)}`);
-  }
 
   console.log(`[warmy] daemon started (pid ${process.pid}, poll=${pollIntervalSeconds}s)`);
 

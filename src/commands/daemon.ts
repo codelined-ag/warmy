@@ -7,14 +7,25 @@ import {
   isDaemonStopped,
   readDaemonPid,
   runDaemonLoop,
+  safeKillWarmyDaemon,
   setStoppedMarker,
   startDaemonDetached,
+  verifyDaemonOwnership,
 } from "../daemon.js";
 
 export async function runDaemon(): Promise<void> {
-  const config = await loadConfig();
-  const interval = config.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS;
-  await runDaemonLoop(interval);
+  try {
+    const config = await loadConfig();
+    const interval = config.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS;
+    await runDaemonLoop(interval);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith("Daemon already running")) {
+      console.log(`[warmy] ${msg}; exiting cleanly.`);
+      process.exit(0);
+    }
+    throw err;
+  }
 }
 
 function resolveWarmyPath(): string {
@@ -23,7 +34,7 @@ function resolveWarmyPath(): string {
 
 export async function ensureDaemon(): Promise<void> {
   if (isDaemonStopped()) {
-    console.log("Stopped marker present (~/.warmy/stopped); refusing to start. Run 'warmy start-daemon' to override.");
+    console.log("Stopped by user (~/.warmy/stopped present). Run 'warmy start-daemon' to start.");
     return;
   }
   if (await isDaemonRunning()) {
@@ -31,8 +42,14 @@ export async function ensureDaemon(): Promise<void> {
     console.log(`Warmy daemon already running (pid ${pid}).`);
     return;
   }
-  const pid = await startDaemonDetached(resolveWarmyPath());
-  console.log(`Warmy daemon started (pid ${pid}).`);
+  try {
+    const pid = await startDaemonDetached(resolveWarmyPath());
+    console.log(`Warmy daemon started (pid ${pid}).`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.startsWith("Daemon already running")) return;
+    throw err;
+  }
 }
 
 export async function startDaemonCmd(): Promise<void> {
@@ -72,21 +89,42 @@ export async function stopDaemon(): Promise<void> {
   setStoppedMarker();
   const pid = await readDaemonPid();
   if (pid === null || !(await isDaemonRunning())) {
-    console.log("Warmy daemon is not running. Stopped marker set; watchdog will not restart it.");
-    console.log("Run 'warmy start-daemon' to start it again.");
+    console.log("Daemon not running. Stop marker set; run 'warmy start-daemon' to start.");
     return;
   }
-  try {
-    process.kill(pid, "SIGTERM");
-    console.log(`Sent SIGTERM to daemon (pid ${pid}).`);
-    const exited = await waitForExit(pid, 3000);
-    if (!exited) {
-      console.log(`Daemon did not exit; sending SIGKILL.`);
-      try { process.kill(pid, "SIGKILL"); } catch {}
-    }
-    console.log("Stopped marker set; watchdog will not restart it.");
-    console.log("Run 'warmy start-daemon' to start it again.");
-  } catch (err) {
-    console.error(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
+  if (!verifyDaemonOwnership(pid)) {
+    console.log("PID file does not match a running warmy daemon. Stop marker set anyway.");
+    return;
   }
+  if (!safeKillWarmyDaemon(pid, "SIGTERM")) {
+    console.error(`Failed to send SIGTERM to pid ${pid}.`);
+    console.error("Run 'warmy stop-daemon && warmy start-daemon' manually if needed.");
+    return;
+  }
+  console.log(`Sent SIGTERM to daemon (pid ${pid}).`);
+  const exited = await waitForExit(pid, 3000);
+  if (!exited) {
+    console.log(`Daemon did not exit; sending SIGKILL.`);
+    safeKillWarmyDaemon(pid, "SIGKILL");
+  }
+  console.log("Stopped. Run 'warmy start-daemon' to start it again.");
+}
+
+export async function restartDaemon(): Promise<void> {
+  if (await isDaemonRunning()) {
+    const pid = await readDaemonPid();
+    if (pid !== null && verifyDaemonOwnership(pid)) {
+      if (safeKillWarmyDaemon(pid, "SIGTERM")) {
+        console.log(`Sent SIGTERM to daemon (pid ${pid}).`);
+        const exited = await waitForExit(pid, 3000);
+        if (!exited) safeKillWarmyDaemon(pid, "SIGKILL");
+      }
+    }
+  }
+  if (isDaemonStopped()) {
+    clearStoppedMarker();
+    console.log("Cleared stopped marker.");
+  }
+  const pid = await startDaemonDetached(resolveWarmyPath());
+  console.log(`Warmy daemon started (pid ${pid}).`);
 }
