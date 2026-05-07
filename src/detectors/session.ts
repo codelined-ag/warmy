@@ -58,35 +58,42 @@ export function getNextClaudeWarmup(lastWarmupAt?: number | null): number | null
   }
 }
 
-export function getNextCodexWarmup(): number | null {
+export function getNextCodexWarmup(lastWarmupAt?: number | null): number | null {
   try {
-    const dbPath = join(homedir(), ".codex", "logs_1.sqlite");
-    if (!existsSync(dbPath)) return 0;
-
     const now = Date.now();
-    const cutoff = Math.floor((now - FIVE_HRS) / 1000);
+    let oldest: number | null = null;
+    let newest: number | null = null;
 
-    const oldestResult = execSync(
-      `sqlite3 ${JSON.stringify(dbPath)} "SELECT MIN(ts) FROM logs WHERE ts > ${cutoff}"`,
-      { encoding: "utf-8", stdio: "pipe" }
-    ).trim();
+    const dbPath = join(homedir(), ".codex", "logs_1.sqlite");
+    if (existsSync(dbPath)) {
+      const cutoff = Math.floor((now - FIVE_HRS) / 1000);
 
-    if (!oldestResult || oldestResult === "null") return 0;
+      try {
+        const oldestResult = execSync(
+          `sqlite3 ${JSON.stringify(dbPath)} "SELECT MIN(ts) FROM logs WHERE ts > ${cutoff}"`,
+          { encoding: "utf-8", stdio: "pipe" }
+        ).trim();
+        if (oldestResult && oldestResult !== "null") {
+          oldest = parseInt(oldestResult, 10) * 1000;
+        }
 
-    const oldestTs = parseInt(oldestResult, 10) * 1000;
-    const resetTime = oldestTs + FIVE_HRS;
-
-    const newestResult = execSync(
-      `sqlite3 ${JSON.stringify(dbPath)} "SELECT MAX(ts) FROM logs WHERE ts > ${cutoff}"`,
-      { encoding: "utf-8", stdio: "pipe" }
-    ).trim();
-
-    let newestTs: number | null = null;
-    if (newestResult && newestResult !== "null") {
-      newestTs = parseInt(newestResult, 10) * 1000;
+        const newestResult = execSync(
+          `sqlite3 ${JSON.stringify(dbPath)} "SELECT MAX(ts) FROM logs WHERE ts > ${cutoff}"`,
+          { encoding: "utf-8", stdio: "pipe" }
+        ).trim();
+        if (newestResult && newestResult !== "null") {
+          newest = parseInt(newestResult, 10) * 1000;
+        }
+      } catch {
+      }
     }
 
-    return getNextWarmupImpl(oldestTs, newestTs);
+    if (lastWarmupAt && lastWarmupAt > now - FIVE_HRS) {
+      if (oldest === null || lastWarmupAt < oldest) oldest = lastWarmupAt;
+      if (newest === null || lastWarmupAt > newest) newest = lastWarmupAt;
+    }
+
+    return getNextWarmupImpl(oldest, newest);
   } catch {
     return 0;
   }
