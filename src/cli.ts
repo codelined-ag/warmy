@@ -6,7 +6,7 @@ import { runWarmup } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { uninstall } from "./commands/uninstall.js";
 import { configEdit, setMessage } from "./commands/config.js";
-import { runDaemon, ensureDaemon, stopDaemon } from "./commands/daemon.js";
+import { runDaemon, ensureDaemon, startDaemonCmd, stopDaemon } from "./commands/daemon.js";
 import { upgrade } from "./commands/upgrade.js";
 
 const program = new Command();
@@ -47,16 +47,21 @@ program.command("daemon")
   .action(runDaemon);
 
 program.command("ensure-daemon")
-  .description("Start the daemon if it isn't already running (used as a watchdog)")
+  .description("Start daemon if not running (respects stop marker; used by cron watchdog)")
   .action(ensureDaemon);
 
+program.command("start-daemon")
+  .description("Clear the stop marker and start the daemon (use after stop-daemon)")
+  .action(startDaemonCmd);
+
 program.command("stop-daemon")
-  .description("Stop the running warmy daemon")
+  .description("Stop the running warmy daemon and prevent the watchdog from restarting it")
   .action(stopDaemon);
 
 program.command("upgrade")
   .description("Pull the latest version from npm without touching config")
-  .action(upgrade);
+  .option("--no-restart", "do not restart the daemon after upgrading")
+  .action((opts) => upgrade(opts.restart === false ? ["--no-restart"] : []));
 
 program.command("edit-config")
   .description("Open config file in your $EDITOR")

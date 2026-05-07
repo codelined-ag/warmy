@@ -23,7 +23,22 @@ function resolveWarmyPath(): string {
 
 export async function ensureDaemon(): Promise<void> {
   if (isDaemonStopped()) {
+    console.log("Stopped marker present (~/.warmy/stopped); refusing to start. Run 'warmy start-daemon' to override.");
+    return;
+  }
+  if (await isDaemonRunning()) {
+    const pid = await readDaemonPid();
+    console.log(`Warmy daemon already running (pid ${pid}).`);
+    return;
+  }
+  const pid = await startDaemonDetached(resolveWarmyPath());
+  console.log(`Warmy daemon started (pid ${pid}).`);
+}
+
+export async function startDaemonCmd(): Promise<void> {
+  if (isDaemonStopped()) {
     clearStoppedMarker();
+    console.log("Cleared stopped marker.");
   }
   if (await isDaemonRunning()) {
     const pid = await readDaemonPid();
@@ -58,7 +73,7 @@ export async function stopDaemon(): Promise<void> {
   const pid = await readDaemonPid();
   if (pid === null || !(await isDaemonRunning())) {
     console.log("Warmy daemon is not running. Stopped marker set; watchdog will not restart it.");
-    console.log("Run 'warmy ensure-daemon' to start it again.");
+    console.log("Run 'warmy start-daemon' to start it again.");
     return;
   }
   try {
@@ -69,7 +84,8 @@ export async function stopDaemon(): Promise<void> {
       console.log(`Daemon did not exit; sending SIGKILL.`);
       try { process.kill(pid, "SIGKILL"); } catch {}
     }
-    console.log("Run 'warmy ensure-daemon' to start it again.");
+    console.log("Stopped marker set; watchdog will not restart it.");
+    console.log("Run 'warmy start-daemon' to start it again.");
   } catch (err) {
     console.error(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
   }
