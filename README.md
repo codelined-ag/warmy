@@ -40,7 +40,7 @@ warmy upgrade   # pull the latest version from npm
 
 ## How it actually runs
 
-Warmy is a long-lived background daemon. It polls every **30 seconds** and only fires a real warmup when your window has just expired. Polling is cheap (a config read plus a sqlite query), so the 30s cadence costs you nothing and lets Warmy hit the ideal moment instead of the next 5-minute cron tick.
+Warmy is a long-lived background daemon. It polls every **30 seconds** and only fires a real warmup when your window has just expired. The 30s cadence lets Warmy hit the right moment instead of waiting on the next 5-minute cron tick. Each tick reads `~/.claude/history.jsonl` and runs a couple of `sqlite3` queries against the Codex log, then exits if there's nothing to do, so the cost is negligible on any modern machine.
 
 | Platform | What gets installed | Auto-restart | Reboot persistence |
 |----------|---------------------|--------------|--------------------|
