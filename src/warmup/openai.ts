@@ -36,7 +36,7 @@ export function warmupCodex(message: string): WarmupResult {
     return {
       success: false,
       reply: null,
-      error: err instanceof Error ? err.message : String(err),
+      error: (err instanceof Error ? err.message : String(err)).split("\n")[0].slice(0, 200),
     };
   }
 }
