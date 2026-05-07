@@ -1,6 +1,6 @@
 {
   "name": "@codelined/warmy",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Keep your Claude Code and Codex CLI sessions warm — automatically. Sends periodic pings via the Anthropic API to reset the 5-hour rate limit window before it expires.",
   "type": "module",
   "bin": {
