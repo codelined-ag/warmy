@@ -2,53 +2,69 @@
 
 # Warmy
 
-**Keep your Claude Code and Codex CLI sessions warm, automatically.**
+**Never wait for your Claude Code or Codex CLI session to come back.**
 
-Warmy sends a ping to the Anthropic API 1 minute after your 5-hour rate limit window expires, so your next session always starts fresh. It tracks your actual API usage from `~/.claude/history.jsonl` and `~/.codex/logs_1.sqlite`, so it only fires when needed.
+You know that feeling. You sit down to ship something, type a prompt, and get hit with *"You've reached your rate limit. Try again at 4:23pm."* Three hours of dead time you didn't ask for.
 
-Warmy runs as a long-lived background daemon that polls every **30 seconds** and auto-restarts on reboot.
+Warmy fixes that. It quietly watches your 5-hour rate-limit window, waits for it to expire, then fires a tiny ping to start a fresh one. By the time you come back to your terminal, the window is already open and waiting for you.
 
-## How it works
+## Why Warmy
 
-Claude Code and Codex CLI use a **rolling 5-hour rate limit window**. The clock starts from your first API request in that window. Warmy finds that first request, waits for the window to expire, then sends a warmup message 1 minute later. This starts a fresh window before your next session.
+Claude Code and Codex CLI both use a **rolling 5-hour rate-limit window**. The clock starts the moment you fire your first request, and the only way to get a new window is to wait for the old one to expire and then send another request. Skip that second step and you're locked out until you happen to type something hours later.
 
-If you were actively using the tool within 10 minutes before the window would reset, Warmy skips the ping (your own usage already refreshed it).
+Warmy automates the second step. It does one thing well:
 
-If a warmup attempt fails (e.g. expired token), Warmy backs off for 5 minutes before trying again — it will not hammer the API.
+1. Reads your real API history from `~/.claude/history.jsonl` and `~/.codex/logs_1.sqlite`.
+2. Figures out exactly when your current 5-hour window expires.
+3. Sends a single warmup ping 1 minute after expiry.
 
-## Installation
+If you're actively coding within 10 minutes of the reset, Warmy stays out of your way. Your own activity already refreshed the window.
+
+## Install
 
 ```bash
 npm install -g @codelined/warmy
+warmy init
 ```
+
+That's it. `init` detects which CLIs you have installed, installs the scheduler, and starts the background daemon. Reboot whenever you want, the daemon comes right back.
 
 ## Quick start
 
 ```bash
-# Interactive setup
-warmy init
-
-# Check status
-warmy status
-
-# Trigger a warmup now
-warmy run
+warmy init      # interactive setup
+warmy status    # see what Warmy is doing right now
+warmy run       # force a warmup attempt
+warmy upgrade   # pull the latest version from npm
 ```
+
+## How it actually runs
+
+Warmy is a long-lived background daemon. It polls every **30 seconds** and only fires a real warmup when your window has just expired. Polling is cheap (a config read plus a sqlite query), so the 30s cadence costs you nothing and lets Warmy hit the ideal moment instead of the next 5-minute cron tick.
+
+| Platform | What gets installed | Auto-restart | Reboot persistence |
+|----------|---------------------|--------------|--------------------|
+| macOS    | `launchd` plist with `KeepAlive=true` and `RunAtLoad=true` | yes (launchd respawns) | yes (loads on login) |
+| Linux    | cron `@reboot warmy ensure-daemon` plus a 1-minute `ensure-daemon` watchdog | yes (watchdog respawns) | yes (cron starts at boot) |
+
+No `loginctl enable-linger`. No systemd unit files. No surprises.
+
+The daemon writes its PID to `~/.warmy/daemon.pid` and refuses to start a second instance. Output goes to `~/.warmy/daemon.log`. Failed warmups (expired token, network blip) trigger a 5-minute backoff so Warmy never hammers the API.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `warmy init` | Interactive setup, installs scheduler and starts the daemon |
-| `warmy run` | Check window and warm up if needed (one-shot) |
-| `warmy status` | Show config, scheduler, daemon, next warmup time |
-| `warmy daemon` | Run the polling loop in the foreground (used by scheduler) |
-| `warmy ensure-daemon` | Start the daemon if it isn't running (used as a watchdog) |
-| `warmy stop-daemon` | Stop the running daemon |
-| `warmy upgrade` | Pull the latest version from npm without touching config |
-| `warmy set-message <msg>` | Set a custom warmup message |
-| `warmy edit-config` | Open config file in `$EDITOR` |
-| `warmy uninstall` | Remove scheduler, daemon, config, and stored data |
+| Command | What it does |
+|---------|--------------|
+| `warmy init` | Interactive setup. Installs the scheduler, starts the daemon. |
+| `warmy status` | Config, scheduler, daemon PID, next warmup time. |
+| `warmy run` | Run a single warmup check now. Useful for debugging. |
+| `warmy daemon` | Run the polling loop in the foreground. Used by the scheduler. |
+| `warmy ensure-daemon` | Start the daemon if it isn't running. Used as a watchdog. |
+| `warmy stop-daemon` | Send `SIGTERM` to the running daemon. |
+| `warmy upgrade` | Pull `@codelined/warmy@latest` from npm. Leaves config alone. |
+| `warmy set-message "..."` | Customize the warmup message. |
+| `warmy edit-config` | Open `~/.warmy/config.json` in `$EDITOR`. |
+| `warmy uninstall` | Stop daemon, remove scheduler, wipe config and tokens. |
 
 ## Customizing the warmup message
 
@@ -56,35 +72,7 @@ warmy run
 warmy set-message "Hey Claude, just keeping the session warm."
 ```
 
-Both Claude Code and Codex will receive this message during warmup. Default is `"Hello Claude. Howdy?"`.
-
-## How window tracking works
-
-Warmy tracks the 5-hour rate limit window by reading your actual API request history:
-
-- **Claude Code**: Reads `timestamp` fields from `~/.claude/history.jsonl`
-- **Codex CLI**: Reads log timestamps from `~/.codex/logs_1.sqlite`
-
-The oldest request in the last 5 hours is the start of your current window. Warmy fires 1 minute after that window expires. If no requests exist in the last 5 hours, the window has already reset and Warmy fires immediately.
-
-## Scheduler & daemon
-
-```bash
-warmy init   # installs launchd (macOS) or cron (Linux), and starts the daemon
-```
-
-Warmy runs as a long-lived **daemon** that polls every 30 seconds. The
-scheduler keeps the daemon alive across reboots and crashes:
-
-- **macOS** — launchd plist with `KeepAlive=true` and `RunAtLoad=true` runs
-  `warmy daemon`. launchd auto-restarts it if it dies and starts it on login.
-- **Linux** — `cron` installs `@reboot warmy ensure-daemon` (so the daemon
-  starts on every reboot) plus a one-minute watchdog (`* * * * * warmy
-  ensure-daemon`) that respawns it if it ever dies. No `loginctl
-  enable-linger` required.
-
-The daemon writes its PID to `~/.warmy/daemon.pid` and refuses to start a
-second instance. Logs go to `~/.warmy/daemon.log`.
+Both Claude Code and Codex receive this exact message during warmup. The default is `"Hey Claude, just warming up the session. How's it going?"`.
 
 ## Upgrading
 
@@ -92,8 +80,7 @@ second instance. Logs go to `~/.warmy/daemon.log`.
 warmy upgrade
 ```
 
-Pulls `@codelined/warmy@latest` globally without touching `~/.warmy/config.json`.
-Restart the daemon afterwards to pick up the new version:
+Pulls the latest version globally and never touches `~/.warmy/config.json`. After upgrading, restart the daemon to load the new code:
 
 ```bash
 warmy stop-daemon && warmy ensure-daemon
@@ -101,9 +88,9 @@ warmy stop-daemon && warmy ensure-daemon
 
 ## Requirements
 
-- Node.js 18+
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and/or [Codex CLI](https://github.com/openai/codex) installed and authenticated
-- macOS (launchd) or Linux (cron) for scheduled mode
+- Node.js 18 or newer
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [Codex CLI](https://github.com/openai/codex) (or both) installed and signed in
+- macOS (launchd) or Linux (cron) for the scheduler
 
 ---
 
