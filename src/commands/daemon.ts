@@ -2,9 +2,12 @@ import { fileURLToPath } from "url";
 import { loadConfig } from "../config.js";
 import {
   DEFAULT_POLL_INTERVAL_SECONDS,
+  clearStoppedMarker,
   isDaemonRunning,
+  isDaemonStopped,
   readDaemonPid,
   runDaemonLoop,
+  setStoppedMarker,
   startDaemonDetached,
 } from "../daemon.js";
 
@@ -19,6 +22,9 @@ function resolveWarmyPath(): string {
 }
 
 export async function ensureDaemon(): Promise<void> {
+  if (isDaemonStopped()) {
+    clearStoppedMarker();
+  }
   if (await isDaemonRunning()) {
     const pid = await readDaemonPid();
     console.log(`Warmy daemon already running (pid ${pid}).`);
@@ -28,15 +34,42 @@ export async function ensureDaemon(): Promise<void> {
   console.log(`Warmy daemon started (pid ${pid}).`);
 }
 
+async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      process.kill(pid, 0);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ESRCH") return true;
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export async function stopDaemon(): Promise<void> {
+  setStoppedMarker();
   const pid = await readDaemonPid();
   if (pid === null || !(await isDaemonRunning())) {
-    console.log("Warmy daemon is not running.");
+    console.log("Warmy daemon is not running. Stopped marker set; watchdog will not restart it.");
+    console.log("Run 'warmy ensure-daemon' to start it again.");
     return;
   }
   try {
     process.kill(pid, "SIGTERM");
     console.log(`Sent SIGTERM to daemon (pid ${pid}).`);
+    const exited = await waitForExit(pid, 3000);
+    if (!exited) {
+      console.log(`Daemon did not exit; sending SIGKILL.`);
+      try { process.kill(pid, "SIGKILL"); } catch {}
+    }
+    console.log("Run 'warmy ensure-daemon' to start it again.");
   } catch (err) {
     console.error(`Failed to stop daemon: ${err instanceof Error ? err.message : String(err)}`);
   }
