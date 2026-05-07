@@ -1,12 +1,19 @@
 import { execSync } from "child_process";
-import { writeFile } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import { tmpdir } from "os";
+import { tmpdir, homedir } from "os";
 
 const WARMY_TAG = "# warmy-managed";
+const SAFE_PATH_RE = /^\/[A-Za-z0-9_./@:+-]+$/;
 
 function sanitizePath(path: string): boolean {
-  return path.startsWith("/") && !path.includes("..");
+  if (!SAFE_PATH_RE.test(path)) return false;
+  if (path.includes("..")) return false;
+  return true;
+}
+
+function shellSingleQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 function readCrontab(): string {
@@ -20,35 +27,47 @@ function readCrontab(): string {
   }
 }
 
+const LEGACY_CRON_RE = /^\s*\*\/5\s+\*\s+\*\s+\*\s+\*\s+.*\bwarmy\b\s+run\b/;
+
 function stripWarmyEntries(existing: string): string[] {
   return existing.split("\n").filter((line) => {
     if (line.trim() === "") return false;
     if (line.includes(WARMY_TAG)) return false;
-    if (line.includes("/tmp/warmy.log")) return false;
-    if (line.includes("warmy run")) return false;
-    if (line.includes("warmy daemon")) return false;
-    if (line.includes("warmy ensure-daemon")) return false;
+    if (LEGACY_CRON_RE.test(line)) return false;
     return true;
   });
 }
 
 async function writeCrontab(lines: string[]): Promise<void> {
   const newCrontab = lines.join("\n") + "\n";
-  const tmpFile = join(tmpdir(), `warmy-cron-${Date.now()}.tmp`);
-  await writeFile(tmpFile, newCrontab, "utf-8");
+  const tmpFile = join(tmpdir(), `warmy-cron-${Date.now()}-${process.pid}.tmp`);
+  await writeFile(tmpFile, newCrontab, { encoding: "utf-8", mode: 0o600 });
   execSync(`crontab "${tmpFile}"`, { stdio: "pipe" });
 }
 
 export async function installCron(warmyPath: string): Promise<void> {
   if (!sanitizePath(warmyPath)) {
-    throw new Error("warmyPath must be an absolute path");
+    throw new Error(
+      "warmyPath must be an absolute path with safe characters only (alnum / . _ / @ : + -)"
+    );
+  }
+  if (!sanitizePath(process.execPath)) {
+    throw new Error("Node binary path contains unsafe characters; refusing to install cron");
   }
 
-  const node = process.execPath;
-  const logPath = "/tmp/warmy.log";
+  const home = homedir();
+  const warmyDir = join(home, ".warmy");
+  try {
+    await mkdir(warmyDir, { recursive: true, mode: 0o700 });
+  } catch {
+  }
 
-  const rebootJob = `@reboot ${node} ${warmyPath} ensure-daemon >> ${logPath} 2>&1 ${WARMY_TAG}`;
-  const watchdogJob = `* * * * * ${node} ${warmyPath} ensure-daemon >> ${logPath} 2>&1 ${WARMY_TAG}`;
+  const node = shellSingleQuote(process.execPath);
+  const path = shellSingleQuote(warmyPath);
+  const logPath = shellSingleQuote(join(warmyDir, "cron.log"));
+
+  const rebootJob = `@reboot ${node} ${path} ensure-daemon >> ${logPath} 2>&1 ${WARMY_TAG}`;
+  const watchdogJob = `* * * * * ${node} ${path} ensure-daemon >> ${logPath} 2>&1 ${WARMY_TAG}`;
 
   const lines = stripWarmyEntries(readCrontab());
   lines.push(rebootJob);

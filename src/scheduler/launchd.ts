@@ -6,6 +6,10 @@ import { existsSync } from "fs";
 
 const PLIST_NAME = "com.warmy.warmy.plist";
 
+function warmyLogPath(): string {
+  return join(homedir(), ".warmy", "launchd.log");
+}
+
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
@@ -34,13 +38,16 @@ function generatePlist(warmyPath: string, nodePath: string): string {
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
-    <true/>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
-    <string>/tmp/warmy.stdout.log</string>
+    <string>${escapeXml(warmyLogPath())}</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/warmy.stderr.log</string>
+    <string>${escapeXml(warmyLogPath())}</string>
 </dict>
 </plist>`;
 }
@@ -58,6 +65,11 @@ export async function installLaunchd(warmyPath: string): Promise<void> {
     await mkdir(launchAgentsDir, { recursive: true, mode: 0o755 });
   } catch (err) {
     throw new Error(`Failed to create LaunchAgents directory: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    await mkdir(join(home, ".warmy"), { recursive: true, mode: 0o700 });
+  } catch {
   }
 
   const plist = generatePlist(warmyPath, process.execPath);
