@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { homedir, platform } from "os";
-import { existsSync, renameSync, unlinkSync } from "fs";
+import { existsSync, renameSync } from "fs";
 import { WARMUP_INTERVAL_SECONDS } from "./warmup/types.js";
 
 export interface WarmupResultEntry {
@@ -88,13 +88,8 @@ export async function saveConfig(config: WarmyConfig): Promise<void> {
 
   await mkdir(dir, { recursive: true, mode: 0o700 });
 
-  const tmpPath = `${configPath}.tmp`;
-  await writeFile(tmpPath, JSON.stringify(config, null, 2), "utf-8");
-
-  try {
-    unlinkSync(configPath);
-  } catch {
-  }
+  const tmpPath = `${configPath}.${process.pid}.tmp`;
+  await writeFile(tmpPath, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o600 });
   renameSync(tmpPath, configPath);
 }
 

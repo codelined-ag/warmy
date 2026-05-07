@@ -110,12 +110,12 @@ describe("config", () => {
         mode: 0o700,
       });
       expect(writeFile).toHaveBeenCalledWith(
-        "/home/user/.warmy/config.json.tmp",
+        expect.stringMatching(/\/home\/user\/\.warmy\/config\.json\.\d+\.tmp$/),
         expect.any(String),
-        "utf-8"
+        expect.objectContaining({ encoding: "utf-8" })
       );
       expect(renameSync).toHaveBeenCalledWith(
-        "/home/user/.warmy/config.json.tmp",
+        expect.stringMatching(/\/home\/user\/\.warmy\/config\.json\.\d+\.tmp$/),
         "/home/user/.warmy/config.json"
       );
     });

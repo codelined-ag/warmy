@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { existsSync, readFileSync, accessSync, constants } from "fs";
 import { join } from "path";
 import { type WarmupResult } from "./types.js";
@@ -23,14 +23,41 @@ function findCodexBinary(): string {
 export function warmupCodex(message: string): WarmupResult {
   try {
     const codexBin = findCodexBinary();
-    const reply = execSync(
-      `${JSON.stringify(codexBin)} exec --ephemeral --dangerously-bypass-approvals-and-sandbox --sandbox read-only ${JSON.stringify(message)}`,
+    const result = spawnSync(
+      codexBin,
+      [
+        "exec",
+        "--ephemeral",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--sandbox",
+        "read-only",
+        message,
+      ],
       {
         encoding: "utf-8",
         timeout: 120_000,
         stdio: ["pipe", "pipe", "pipe"],
+        shell: false,
       }
-    ).trim();
+    );
+
+    if (result.error) {
+      return {
+        success: false,
+        reply: null,
+        error: result.error.message.split("\n")[0].slice(0, 200),
+      };
+    }
+    if ((result.status ?? 0) !== 0) {
+      const errText = (result.stderr || "").toString().split("\n")[0].slice(0, 200);
+      return {
+        success: false,
+        reply: null,
+        error: errText || `codex exec failed with code ${result.status}`,
+      };
+    }
+
+    const reply = (result.stdout || "").toString().trim();
     return { success: true, reply: reply || "(empty)", error: null };
   } catch (err) {
     return {

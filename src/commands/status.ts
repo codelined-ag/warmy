@@ -40,7 +40,10 @@ export async function status(): Promise<void> {
   }
 
   if (config.codexEnabled) {
-    const next = getNextCodexWarmup();
+    const lastCodexWarmup = config.lastWarmupAt.codex
+      ? new Date(config.lastWarmupAt.codex).getTime()
+      : null;
+    const next = getNextCodexWarmup(lastCodexWarmup);
     if (next === null) {
       console.log(`Codex:     user active near window reset, skipping this window`);
     } else if (next <= Date.now()) {

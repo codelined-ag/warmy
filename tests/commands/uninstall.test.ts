@@ -9,6 +9,9 @@ vi.mock("../../dist/keyring.js", () => ({ removeToken: vi.fn() }));
 vi.mock("../../dist/daemon.js", () => ({
   isDaemonRunning: vi.fn().mockResolvedValue(false),
   readDaemonPid: vi.fn().mockResolvedValue(null),
+  getPidFilePath: vi.fn().mockReturnValue("/tmp/.warmy/daemon.pid"),
+  getDaemonLogPath: vi.fn().mockReturnValue("/tmp/.warmy/daemon.log"),
+  getStoppedMarkerPath: vi.fn().mockReturnValue("/tmp/.warmy/stopped"),
 }));
 
 const UNINSTALL_PATH = "/home/slay/projects/codex-projects/warmy/warmy/dist/commands/uninstall.js";

@@ -6,6 +6,17 @@ import { getNextClaudeWarmup, getNextCodexWarmup } from "../detectors/session.js
 
 const FAILURE_BACKOFF_MS = 5 * 60 * 1000;
 
+const lastLog: Record<"claude" | "codex", string> = { claude: "", codex: "" };
+function logOnce(provider: "claude" | "codex", message: string): void {
+  if (lastLog[provider] === message) return;
+  lastLog[provider] = message;
+  console.log(message);
+}
+function logForce(provider: "claude" | "codex", message: string): void {
+  lastLog[provider] = message;
+  console.log(message);
+}
+
 export async function runWarmup(): Promise<void> {
   const config = await loadConfig();
   const timestamp = new Date().toISOString();
@@ -20,7 +31,7 @@ export async function runWarmup(): Promise<void> {
   ) {
     if ((!config.claudeEnabled && provider === "claude") ||
         (!config.codexEnabled && provider === "codex")) {
-      console.log(`○ ${label}: disabled`);
+      logOnce(provider, `○ ${label}: disabled`);
       return;
     }
 
@@ -30,12 +41,12 @@ export async function runWarmup(): Promise<void> {
     const nextWarmup = getNextWarmup(lastWarmupTs);
 
     if (nextWarmup === null) {
-      console.log(`○ ${label}: user was active near window reset, skipping`);
+      logOnce(provider, `○ ${label}: user was active near window reset, skipping`);
       return;
     }
 
     if (nextWarmup > nowMs) {
-      console.log(`○ ${label}: next warmup at ${new Date(nextWarmup).toISOString()}`);
+      logOnce(provider, `○ ${label}: next warmup at ${new Date(nextWarmup).toISOString()}`);
       return;
     }
 
@@ -44,18 +55,23 @@ export async function runWarmup(): Promise<void> {
       const lastFailMs = new Date(lastFail.timestamp).getTime();
       if (nowMs - lastFailMs < FAILURE_BACKOFF_MS) {
         const remainingMs = FAILURE_BACKOFF_MS - (nowMs - lastFailMs);
-        console.log(`○ ${label}: backing off after failure (retry in ${Math.ceil(remainingMs / 1000)}s)`);
+        const retryAt = new Date(lastFailMs + FAILURE_BACKOFF_MS).toISOString();
+        logOnce(
+          provider,
+          `○ ${label}: backing off after failure (retry at ${retryAt}, ${Math.ceil(remainingMs / 1000)}s remaining) — last error: ${lastFail.error}`
+        );
         return;
       }
     }
 
-    console.log(`Warming up ${label}...`);
+    logForce(provider, `Warming up ${label}...`);
     const result = await warmupFn(config.warmupMessage);
     if (result.success) {
       const reply = (result.reply || "").slice(0, 80);
-      console.log(`✓ ${label} warmup succeeded: "${reply}"`);
+      logForce(provider, `✓ ${label} warmup succeeded: "${reply}"`);
       config.lastWarmupAt[provider] = timestamp;
     } else {
+      lastLog[provider] = `✗ ${label} warmup failed: ${result.error}`;
       console.error(`✗ ${label} warmup failed: ${result.error}`);
     }
     config.lastResult[provider] = { success: result.success, timestamp, error: result.error };

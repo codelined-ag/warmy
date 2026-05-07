@@ -41,11 +41,14 @@ export async function warmupClaude(message: string): Promise<WarmupResult> {
     });
 
     if (!response.ok) {
-      const text = await response.text();
+      const text = (await response.text()).slice(0, 300);
+      const scrubbed = text
+        .replace(/sk-ant-[A-Za-z0-9_-]+/g, "<redacted>")
+        .replace(/Bearer\s+[A-Za-z0-9_.-]+/gi, "Bearer <redacted>");
       return {
         success: false,
         reply: null,
-        error: `Anthropic API error: ${response.status} ${response.statusText} — ${text}`,
+        error: `Anthropic API error: ${response.status} ${response.statusText} ${scrubbed}`,
       };
     }
 
