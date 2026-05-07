@@ -1,13 +1,21 @@
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 import { homedir, platform } from "os";
-import { existsSync, renameSync } from "fs";
+import { existsSync, lstatSync, mkdirSync, renameSync } from "fs";
 import { WARMUP_INTERVAL_SECONDS } from "./warmup/types.js";
 
 export interface WarmupResultEntry {
   success: boolean;
   timestamp: string;
   error?: string | null;
+}
+
+export interface WarmyStats {
+  daemonStartedAt: string | null;
+  claudeWarmups: number;
+  codexWarmups: number;
+  claudeFailures: number;
+  codexFailures: number;
 }
 
 export interface WarmyConfig {
@@ -27,6 +35,7 @@ export interface WarmyConfig {
     codex: WarmupResultEntry | null;
   };
   timezone: string;
+  stats: WarmyStats;
 }
 
 export function detectTimezone(): string {
@@ -54,6 +63,13 @@ const DEFAULT_CONFIG: WarmyConfig = {
     codex: null,
   },
   timezone: detectTimezone(),
+  stats: {
+    daemonStartedAt: null,
+    claudeWarmups: 0,
+    codexWarmups: 0,
+    claudeFailures: 0,
+    codexFailures: 0,
+  },
 };
 
 export function getConfigPath(): string {
@@ -76,17 +92,40 @@ export async function loadConfig(): Promise<WarmyConfig> {
   try {
     const content = await readFile(configPath, "utf-8");
     const data = JSON.parse(content);
-    return { ...DEFAULT_CONFIG, ...data };
+    const merged = { ...DEFAULT_CONFIG, ...data };
+    merged.stats = { ...DEFAULT_CONFIG.stats, ...(data.stats || {}) };
+    return merged;
   } catch {
     return DEFAULT_CONFIG;
   }
 }
 
-export async function saveConfig(config: WarmyConfig): Promise<void> {
+function ensureSafeWarmyDirSync(): string {
   const dir = getWarmyDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    return dir;
+  }
+  const lst = lstatSync(dir);
+  if (lst.isSymbolicLink()) {
+    throw new Error(`Refusing to use ${dir}: it is a symlink`);
+  }
+  if (typeof process.geteuid === "function" && lst.uid !== process.geteuid()) {
+    throw new Error(`Refusing to use ${dir}: owner uid ${lst.uid} != ours ${process.geteuid()}`);
+  }
+  return dir;
+}
+
+export async function saveConfig(config: WarmyConfig): Promise<void> {
+  ensureSafeWarmyDirSync();
   const configPath = getConfigPath();
 
-  await mkdir(dir, { recursive: true, mode: 0o700 });
+  if (existsSync(configPath)) {
+    const lst = lstatSync(configPath);
+    if (lst.isSymbolicLink()) {
+      throw new Error(`Refusing to save: ${configPath} is a symlink`);
+    }
+  }
 
   const tmpPath = `${configPath}.${process.pid}.tmp`;
   await writeFile(tmpPath, JSON.stringify(config, null, 2), { encoding: "utf-8", mode: 0o600 });

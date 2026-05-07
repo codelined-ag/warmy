@@ -1,11 +1,16 @@
-import { mkdir, readFile } from "fs/promises";
+import { readFile } from "fs/promises";
 import { join } from "path";
 import { spawn } from "child_process";
 import {
   closeSync,
+  constants as fsConstants,
   existsSync,
+  lstatSync,
+  mkdirSync,
   openSync,
   readFileSync,
+  renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
   writeSync,
@@ -14,6 +19,7 @@ import { getWarmyDir } from "./config.js";
 
 export const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 const DAEMON_OWNER_TAG = "warmy-daemon";
+const MAX_LOG_BYTES = 5 * 1024 * 1024;
 
 export function getPidFilePath(): string {
   return join(getWarmyDir(), "daemon.pid");
@@ -102,9 +108,19 @@ export function isDaemonStopped(): boolean {
 }
 
 export function setStoppedMarker(): void {
-  const dir = getWarmyDir();
-  if (!existsSync(dir)) return;
-  writeFileSync(getStoppedMarkerPath(), new Date().toISOString(), { mode: 0o600 });
+  try {
+    ensureSafeWarmyDir();
+  } catch {
+    return;
+  }
+  const path = getStoppedMarkerPath();
+  try {
+    if (existsSync(path) && lstatSync(path).isSymbolicLink()) {
+      unlinkSync(path);
+    }
+  } catch {
+  }
+  writeFileSync(path, new Date().toISOString(), { mode: 0o600 });
 }
 
 export function clearStoppedMarker(): void {
@@ -127,12 +143,50 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function startDaemonDetached(warmyPath: string): Promise<number> {
+function ensureSafeWarmyDir(): string {
   const dir = getWarmyDir();
-  await mkdir(dir, { recursive: true, mode: 0o700 });
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  const lst = lstatSync(dir);
+  if (lst.isSymbolicLink()) {
+    throw new Error(`Refusing to use ${dir}: it is a symlink`);
+  }
+  if (typeof process.geteuid === "function" && lst.uid !== process.geteuid()) {
+    throw new Error(`Refusing to use ${dir}: owner uid ${lst.uid} != ours ${process.geteuid()}`);
+  }
+  return dir;
+}
+
+function openNoFollow(path: string, flags: number, mode: number): number {
+  return openSync(path, flags | fsConstants.O_NOFOLLOW, mode);
+}
+
+function rotateDaemonLogIfLarge(): void {
+  const logPath = getDaemonLogPath();
+  if (!existsSync(logPath)) return;
+  try {
+    const lst = lstatSync(logPath);
+    if (lst.isSymbolicLink()) {
+      unlinkSync(logPath);
+      return;
+    }
+    if (lst.size >= MAX_LOG_BYTES) {
+      const rotated = `${logPath}.1`;
+      try { unlinkSync(rotated); } catch {}
+      renameSync(logPath, rotated);
+    }
+  } catch {
+  }
+}
+
+export async function startDaemonDetached(warmyPath: string): Promise<number> {
+  ensureSafeWarmyDir();
+  rotateDaemonLogIfLarge();
 
   const logPath = getDaemonLogPath();
-  const out = openSync(logPath, "a", 0o600);
+  const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_APPEND;
+  const out = openNoFollow(logPath, flags, 0o600);
 
   const child = spawn(process.execPath, [warmyPath, "daemon"], {
     detached: true,
@@ -150,7 +204,7 @@ export async function startDaemonDetached(warmyPath: string): Promise<number> {
 }
 
 function acquirePidFile(): void {
-  const dir = getWarmyDir();
+  ensureSafeWarmyDir();
   const pidFile = getPidFilePath();
   const record: PidRecord = {
     pid: process.pid,
@@ -159,9 +213,25 @@ function acquirePidFile(): void {
   };
   const payload = JSON.stringify(record);
 
+  if (existsSync(pidFile)) {
+    try {
+      const lst = lstatSync(pidFile);
+      if (lst.isSymbolicLink()) {
+        unlinkSync(pidFile);
+      }
+    } catch {
+    }
+  }
+
+  const flags =
+    fsConstants.O_WRONLY |
+    fsConstants.O_CREAT |
+    fsConstants.O_EXCL |
+    fsConstants.O_NOFOLLOW;
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const fd = openSync(pidFile, "wx", 0o600);
+      const fd = openSync(pidFile, flags, 0o600);
       try {
         writeSync(fd, payload);
       } finally {
@@ -171,14 +241,6 @@ function acquirePidFile(): void {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") {
-        if (code === "ENOENT") {
-          try {
-            const { mkdirSync } = require("fs");
-            mkdirSync(dir, { recursive: true, mode: 0o700 });
-            continue;
-          } catch {
-          }
-        }
         throw err;
       }
       const existing = readRecordSync();
@@ -200,7 +262,8 @@ export async function runDaemonLoop(pollIntervalSeconds: number): Promise<void> 
     return;
   }
 
-  await mkdir(getWarmyDir(), { recursive: true, mode: 0o700 });
+  ensureSafeWarmyDir();
+  rotateDaemonLogIfLarge();
   acquirePidFile();
 
   let stopping = false;
@@ -219,6 +282,15 @@ export async function runDaemonLoop(pollIntervalSeconds: number): Promise<void> 
 
   const interval = Math.max(5, pollIntervalSeconds) * 1000;
   const { runWarmup } = await import("./commands/run.js");
+  const { loadConfig, saveConfig } = await import("./config.js");
+
+  try {
+    const cfg = await loadConfig();
+    cfg.stats.daemonStartedAt = new Date().toISOString();
+    await saveConfig(cfg);
+  } catch (err) {
+    console.error(`[warmy] could not record daemon start: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   console.log(`[warmy] daemon started (pid ${process.pid}, poll=${pollIntervalSeconds}s)`);
 
