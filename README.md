@@ -59,8 +59,9 @@ The daemon writes its PID to `~/.warmy/daemon.pid` and refuses to start a second
 | `warmy status` | Config, scheduler, daemon PID, next warmup time. |
 | `warmy run` | Run a single warmup check now. Useful for debugging. |
 | `warmy daemon` | Run the polling loop in the foreground. Used by the scheduler. |
-| `warmy ensure-daemon` | Start the daemon if not running and not explicitly stopped. Used by the cron watchdog. |
-| `warmy start-daemon` | Clear the stop marker and start. Use after `stop-daemon`. |
+| `warmy ensure-daemon` | Start daemon unless explicitly stopped. Cron watchdog hook; will not override `stop-daemon`. |
+| `warmy start-daemon` | Force-start the daemon, clearing any stop marker. |
+| `warmy restart-daemon` | Stop the running daemon, clear the stop marker, and start fresh. |
 | `warmy stop-daemon` | Stop the daemon and prevent the watchdog from restarting it. |
 | `warmy upgrade` | Pull `@codelined/warmy@latest` from npm. Leaves config alone. |
 | `warmy set-message "..."` | Customize the warmup message. |
@@ -85,8 +86,18 @@ Pulls the latest version globally and never touches `~/.warmy/config.json`. By d
 
 ```bash
 warmy upgrade --no-restart
-warmy stop-daemon && warmy start-daemon
+warmy restart-daemon
 ```
+
+## Troubleshooting
+
+**"Refusing to use ~/.warmy: owner uid 0 != ours ..."** — you ran `warmy` with `sudo` at some point and the directory ended up root-owned. Fix:
+
+```bash
+sudo chown -R $USER ~/.warmy
+```
+
+**Logs** — the daemon writes to `~/.warmy/daemon.log` and rotates at 5 MB, keeping `daemon.log.1`, `.2`, `.3`. The cron watchdog logs to `~/.warmy/cron.log`.
 
 ## Requirements
 
