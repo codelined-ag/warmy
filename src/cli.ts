@@ -87,11 +87,7 @@ program.addHelpText("afterAll", `
 
 function fatal(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
-  if (msg.startsWith("Refusing to use")) {
-    console.error(`\n✗ ${msg}\n`);
-  } else {
-    console.error(`\n✗ ${msg}\n`);
-  }
+  console.error(`\n✗ ${msg}\n`);
   process.exit(1);
 }
 

@@ -35,11 +35,14 @@ function findInstallRoot(): string | null {
 type PackageManager = "npm" | "pnpm" | "yarn" | "bun" | "volta";
 
 function detectPackageManager(): PackageManager {
-  const fullPath = entryPath() + " " + (findInstallRoot() || "");
-  if (/\/\.bun\b|\/bun\/install\b/.test(fullPath)) return "bun";
-  if (/\/\.volta\//.test(fullPath)) return "volta";
-  if (/\/pnpm\/|\/\.pnpm\//.test(fullPath)) return "pnpm";
-  if (/\/yarn\b|\/\.yarn\//.test(fullPath)) return "yarn";
+  const rawArg = process.argv[1] || "";
+  const resolved = entryPath();
+  const root = findInstallRoot() || "";
+  const haystack = `${rawArg} ${resolved} ${root}`;
+  if (/\/\.bun\b|\/bun\/install\b/.test(haystack)) return "bun";
+  if (/\/\.volta\//.test(haystack)) return "volta";
+  if (/\/pnpm\/|\/\.pnpm\//.test(haystack)) return "pnpm";
+  if (/\/yarn\b|\/\.yarn\//.test(haystack)) return "yarn";
   return "npm";
 }
 

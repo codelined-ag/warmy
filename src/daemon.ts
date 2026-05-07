@@ -21,6 +21,15 @@ export const DEFAULT_POLL_INTERVAL_SECONDS = 30;
 const DAEMON_OWNER_TAG = "warmy-daemon";
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 
+export class DaemonAlreadyRunningError extends Error {
+  readonly existingPid: number;
+  constructor(pid: number) {
+    super(`Daemon already running (pid ${pid})`);
+    this.name = "DaemonAlreadyRunningError";
+    this.existingPid = pid;
+  }
+}
+
 export function getPidFilePath(): string {
   return join(getWarmyDir(), "daemon.pid");
 }
@@ -124,11 +133,7 @@ export function isDaemonStopped(): boolean {
 }
 
 export function setStoppedMarker(): void {
-  try {
-    ensureSafeWarmyDir();
-  } catch {
-    return;
-  }
+  ensureSafeWarmyDir();
   const path = getStoppedMarkerPath();
   try { unlinkSync(path); } catch {}
   const flags =
@@ -136,14 +141,11 @@ export function setStoppedMarker(): void {
     fsConstants.O_CREAT |
     fsConstants.O_EXCL |
     fsConstants.O_NOFOLLOW;
+  const fd = openSync(path, flags, 0o600);
   try {
-    const fd = openSync(path, flags, 0o600);
-    try {
-      writeSync(fd, new Date().toISOString());
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
+    writeSync(fd, new Date().toISOString());
+  } finally {
+    closeSync(fd);
   }
 }
 
@@ -280,7 +282,7 @@ function acquirePidFile(): void {
     fsConstants.O_EXCL |
     fsConstants.O_NOFOLLOW;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const fd = openSync(pidFile, flags, 0o600);
       try {
@@ -296,7 +298,7 @@ function acquirePidFile(): void {
       }
       const existing = readRecordSync();
       if (existing && isProcessAlive(existing.pid) && existing.pid !== process.pid) {
-        throw new Error(`Daemon already running (pid ${existing.pid})`);
+        throw new DaemonAlreadyRunningError(existing.pid);
       }
       try {
         unlinkSync(pidFile);
@@ -304,7 +306,7 @@ function acquirePidFile(): void {
       }
     }
   }
-  throw new Error("Failed to acquire daemon PID file");
+  throw new Error("Failed to acquire daemon PID file after retries");
 }
 
 export async function runDaemonLoop(pollIntervalSeconds: number): Promise<void> {
