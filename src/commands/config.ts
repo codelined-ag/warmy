@@ -24,6 +24,13 @@ export async function configEdit(): Promise<void> {
       warmupMessage: "Hey Claude, just warming up the session. How's it going?",
       lastResult: { claude: null, codex: null },
       timezone: detectTimezone(),
+      stats: {
+        daemonStartedAt: null,
+        claudeWarmups: 0,
+        codexWarmups: 0,
+        claudeFailures: 0,
+        codexFailures: 0,
+      },
     });
   }
 

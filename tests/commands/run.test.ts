@@ -32,7 +32,7 @@ describe("runWarmup", () => {
       lastRun: null,
       lastWarmupAt: { claude: new Date().toISOString(), codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "UTC"
     });
     vi.mocked(getNextClaudeWarmup).mockReturnValue(Date.now() + 600000);
@@ -52,7 +52,7 @@ describe("runWarmup", () => {
       scheduleTime: "06:00", claudeEnabled: true, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "UTC"
     });
     vi.mocked(getNextClaudeWarmup).mockReturnValue(0);
@@ -75,7 +75,7 @@ describe("runWarmup", () => {
       scheduleTime: "06:00", claudeEnabled: true, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "UTC"
     });
     vi.mocked(getNextClaudeWarmup).mockReturnValue(0);
@@ -96,7 +96,7 @@ describe("runWarmup", () => {
       scheduleTime: "06:00", claudeEnabled: true, codexEnabled: true,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "UTC"
     });
     vi.mocked(getNextCodexWarmup).mockReturnValue(0);
@@ -116,7 +116,7 @@ describe("runWarmup", () => {
       scheduleTime: "06:00", claudeEnabled: false, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "UTC"
     });
 

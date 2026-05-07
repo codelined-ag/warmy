@@ -13,6 +13,8 @@ vi.mock("fs", async () => {
     existsSync: vi.fn(),
     renameSync: vi.fn(),
     unlinkSync: vi.fn(),
+    lstatSync: vi.fn(),
+    mkdirSync: vi.fn(),
   };
 });
 
@@ -88,9 +90,14 @@ describe("config", () => {
 
   describe("saveConfig", () => {
     it("should create directory and write config file atomically", async () => {
-      vi.mocked(mkdir).mockResolvedValue(undefined);
+      const { lstatSync, mkdirSync } = await import("fs");
       vi.mocked(writeFile).mockResolvedValue(undefined);
-      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(existsSync).mockImplementation((p: any) => String(p).endsWith(".warmy"));
+      vi.mocked(lstatSync).mockReturnValue({
+        isSymbolicLink: () => false,
+        uid: typeof process.geteuid === "function" ? process.geteuid() : 0,
+      } as any);
+      vi.mocked(mkdirSync).mockReturnValue(undefined);
 
       const { saveConfig } = await import(CONFIG_SRC_PATH);
       await saveConfig({
@@ -100,15 +107,13 @@ describe("config", () => {
         lastRun: null,
         lastWarmupAt: { claude: null, codex: null },
         warmupIntervalSeconds: 18060,
+        pollIntervalSeconds: 30,
         warmupMessage: "Hello",
         lastResult: { claude: null, codex: null },
         timezone: "America/New_York",
-      });
+        stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
+      } as any);
 
-      expect(mkdir).toHaveBeenCalledWith("/home/user/.warmy", {
-        recursive: true,
-        mode: 0o700,
-      });
       expect(writeFile).toHaveBeenCalledWith(
         expect.stringMatching(/\/home\/user\/\.warmy\/config\.json\.\d+\.tmp$/),
         expect.any(String),

@@ -70,9 +70,13 @@ export async function runWarmup(): Promise<void> {
       const reply = (result.reply || "").slice(0, 80);
       logForce(provider, `✓ ${label} warmup succeeded: "${reply}"`);
       config.lastWarmupAt[provider] = timestamp;
+      if (provider === "claude") config.stats.claudeWarmups += 1;
+      else config.stats.codexWarmups += 1;
     } else {
       lastLog[provider] = `✗ ${label} warmup failed: ${result.error}`;
       console.error(`✗ ${label} warmup failed: ${result.error}`);
+      if (provider === "claude") config.stats.claudeFailures += 1;
+      else config.stats.codexFailures += 1;
     }
     config.lastResult[provider] = { success: result.success, timestamp, error: result.error };
     dirty = true;

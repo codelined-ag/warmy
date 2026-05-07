@@ -56,6 +56,20 @@ export async function status(): Promise<void> {
     }
   }
 
+  const stats = config.stats;
+  if (stats && (stats.daemonStartedAt || stats.claudeWarmups || stats.codexWarmups || stats.claudeFailures || stats.codexFailures)) {
+    console.log("\n=== Stats ===");
+    if (stats.daemonStartedAt) {
+      console.log(`Daemon started: ${formatInTimezone(stats.daemonStartedAt, tz)}`);
+    }
+    if (config.claudeEnabled) {
+      console.log(`Claude warmups: ${stats.claudeWarmups} ok, ${stats.claudeFailures} failed`);
+    }
+    if (config.codexEnabled) {
+      console.log(`Codex warmups:  ${stats.codexWarmups} ok, ${stats.codexFailures} failed`);
+    }
+  }
+
   if (config.lastRun) console.log(`\nLast run: ${formatInTimezone(config.lastRun, tz)}`);
   if (config.lastResult.claude) {
     const r = config.lastResult.claude;

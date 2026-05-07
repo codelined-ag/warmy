@@ -34,7 +34,7 @@ describe("status", () => {
       scheduleTime: "06:00", claudeEnabled: true, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "UTC"
     });
     vi.mocked(isSchedulerInstalled).mockResolvedValue(true);
@@ -58,7 +58,7 @@ describe("status", () => {
       lastRun: null,
       lastWarmupAt: { claude: "2026-01-01T00:00:00.000Z", codex: "2026-01-01T01:00:00.000Z" },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null },
+      lastResult: { claude: null, codex: null }, stats: { daemonStartedAt: null, claudeWarmups: 0, codexWarmups: 0, claudeFailures: 0, codexFailures: 0 },
       timezone: "America/New_York"
     });
     vi.mocked(isSchedulerInstalled).mockResolvedValue(false);
