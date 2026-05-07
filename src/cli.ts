@@ -6,7 +6,7 @@ import { runWarmup } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { uninstall } from "./commands/uninstall.js";
 import { configEdit, setMessage } from "./commands/config.js";
-import { runDaemon, ensureDaemon, startDaemonCmd, stopDaemon } from "./commands/daemon.js";
+import { runDaemon, ensureDaemon, startDaemonCmd, stopDaemon, restartDaemon } from "./commands/daemon.js";
 import { upgrade } from "./commands/upgrade.js";
 
 const program = new Command();
@@ -47,15 +47,19 @@ program.command("daemon")
   .action(runDaemon);
 
 program.command("ensure-daemon")
-  .description("Start daemon if not running (respects stop marker; used by cron watchdog)")
+  .description("Start daemon unless explicitly stopped (cron watchdog hook; will not override stop-daemon)")
   .action(ensureDaemon);
 
 program.command("start-daemon")
-  .description("Clear the stop marker and start the daemon (use after stop-daemon)")
+  .description("Force-start the daemon, clearing any stop marker set by stop-daemon")
   .action(startDaemonCmd);
 
+program.command("restart-daemon")
+  .description("Stop the daemon if running, clear the stop marker, and start a fresh one")
+  .action(restartDaemon);
+
 program.command("stop-daemon")
-  .description("Stop the running warmy daemon and prevent the watchdog from restarting it")
+  .description("Stop the daemon and prevent the watchdog from restarting it")
   .action(stopDaemon);
 
 program.command("upgrade")
@@ -81,6 +85,16 @@ program.addHelpText("afterAll", `
   Warmy sends a message 1 minute after it expires,
   so your next session gets a fresh window.`);
 
+function fatal(err: unknown): never {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.startsWith("Refusing to use")) {
+    console.error(`\n✗ ${msg}\n`);
+  } else {
+    console.error(`\n✗ ${msg}\n`);
+  }
+  process.exit(1);
+}
+
 if (process.argv[1]?.endsWith("cli.js") || process.argv[1]?.endsWith("warmy")) {
-  program.parse();
+  program.parseAsync().catch(fatal);
 }

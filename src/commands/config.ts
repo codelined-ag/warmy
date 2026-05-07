@@ -25,7 +25,6 @@ export async function configEdit(): Promise<void> {
       lastResult: { claude: null, codex: null },
       timezone: detectTimezone(),
       stats: {
-        daemonStartedAt: null,
         claudeWarmups: 0,
         codexWarmups: 0,
         claudeFailures: 0,

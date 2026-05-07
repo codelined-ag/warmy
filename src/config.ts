@@ -11,7 +11,6 @@ export interface WarmupResultEntry {
 }
 
 export interface WarmyStats {
-  daemonStartedAt: string | null;
   claudeWarmups: number;
   codexWarmups: number;
   claudeFailures: number;
@@ -64,7 +63,6 @@ const DEFAULT_CONFIG: WarmyConfig = {
   },
   timezone: detectTimezone(),
   stats: {
-    daemonStartedAt: null,
     claudeWarmups: 0,
     codexWarmups: 0,
     claudeFailures: 0,

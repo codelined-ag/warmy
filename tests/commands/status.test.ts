@@ -18,6 +18,8 @@ vi.mock("fs", () => ({ existsSync: vi.fn() }));
 vi.mock("../../dist/daemon.js", () => ({
   isDaemonRunning: vi.fn().mockResolvedValue(false),
   readDaemonPid: vi.fn().mockResolvedValue(null),
+  readDaemonStartedAt: vi.fn().mockResolvedValue(null),
+  isDaemonStopped: vi.fn().mockReturnValue(false),
   DEFAULT_POLL_INTERVAL_SECONDS: 30,
 }));
 

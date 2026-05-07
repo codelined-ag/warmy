@@ -2,21 +2,46 @@ import { existsSync } from "fs";
 import { loadConfig, getConfigPath, formatInTimezone } from "../config.js";
 import { isSchedulerInstalled } from "../scheduler/index.js";
 import { getNextClaudeWarmup, getNextCodexWarmup } from "../detectors/session.js";
-import { isDaemonRunning, readDaemonPid, DEFAULT_POLL_INTERVAL_SECONDS } from "../daemon.js";
+import { isDaemonRunning, readDaemonPid, readDaemonStartedAt, isDaemonStopped, DEFAULT_POLL_INTERVAL_SECONDS } from "../daemon.js";
+
+function formatUptime(ms: number): string {
+  if (ms < 0) ms = 0;
+  const s = Math.floor(ms / 1000);
+  const days = Math.floor(s / 86400);
+  const hours = Math.floor((s % 86400) / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h ${mins}m`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
 
 export async function status(): Promise<void> {
   const config = await loadConfig();
   const installed = await isSchedulerInstalled();
   const daemonAlive = await isDaemonRunning();
   const daemonPid = await readDaemonPid();
+  const daemonStartedAt = await readDaemonStartedAt();
+  const stopped = isDaemonStopped();
   const configPath = getConfigPath();
   const tz = config.timezone;
   const pollInterval = config.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS;
 
+  let daemonLine: string;
+  if (daemonAlive && daemonStartedAt) {
+    const uptimeMs = Date.now() - new Date(daemonStartedAt).getTime();
+    daemonLine = `✓ running (pid ${daemonPid}, poll=${pollInterval}s, uptime ${formatUptime(uptimeMs)})`;
+  } else if (daemonAlive) {
+    daemonLine = `✓ running (pid ${daemonPid}, poll=${pollInterval}s)`;
+  } else if (stopped) {
+    daemonLine = "✗ stopped (run 'warmy start-daemon' to resume)";
+  } else {
+    daemonLine = "✗ not running";
+  }
+
   console.log("=== Warmy Status ===\n");
   console.log(`Config file: ${configPath} ${existsSync(configPath) ? "✓" : "(not found)"}`);
   console.log(`Scheduler:   ${installed ? "✓ installed (auto-starts on reboot)" : "✗ not installed"}`);
-  console.log(`Daemon:      ${daemonAlive ? `✓ running (pid ${daemonPid}, poll=${pollInterval}s)` : "✗ not running"}`);
+  console.log(`Daemon:      ${daemonLine}`);
   console.log(`Claude Code: ${config.claudeEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Codex CLI:   ${config.codexEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Timezone:    ${tz}`);
@@ -57,10 +82,10 @@ export async function status(): Promise<void> {
   }
 
   const stats = config.stats;
-  if (stats && (stats.daemonStartedAt || stats.claudeWarmups || stats.codexWarmups || stats.claudeFailures || stats.codexFailures)) {
+  if (stats && (stats.claudeWarmups || stats.codexWarmups || stats.claudeFailures || stats.codexFailures || daemonStartedAt)) {
     console.log("\n=== Stats ===");
-    if (stats.daemonStartedAt) {
-      console.log(`Daemon started: ${formatInTimezone(stats.daemonStartedAt, tz)}`);
+    if (daemonStartedAt && daemonAlive) {
+      console.log(`Daemon up since: ${formatInTimezone(daemonStartedAt, tz)}`);
     }
     if (config.claudeEnabled) {
       console.log(`Claude warmups: ${stats.claudeWarmups} ok, ${stats.claudeFailures} failed`);
