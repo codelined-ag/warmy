@@ -3,7 +3,7 @@ import { execSync } from "child_process";
 import { existsSync } from "fs";
 import { homedir } from "os";
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const INDEX_SRC_PATH = `${PROJECT_ROOT}/dist/scheduler/index.js`;
 
 vi.mock("child_process", async () => {

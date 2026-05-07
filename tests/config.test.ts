@@ -3,7 +3,7 @@ import { existsSync, renameSync, unlinkSync } from "fs";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import { platform } from "os";
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const CONFIG_SRC_PATH = `${PROJECT_ROOT}/dist/config.js`;
 
 vi.mock("fs", async () => {
@@ -52,6 +52,7 @@ describe("config", () => {
       expect(result.scheduleTime).toBe("06:00");
       expect(result.claudeEnabled).toBe(false);
       expect(result.codexEnabled).toBe(false);
+      expect(result.timezone).toBeTruthy();
     });
 
     it("should load existing config", async () => {
@@ -70,6 +71,7 @@ describe("config", () => {
       expect(result.scheduleTime).toBe("07:30");
       expect(result.claudeEnabled).toBe(true);
       expect(result.codexEnabled).toBe(false);
+      expect(result.timezone).toBeTruthy();
     });
 
     it("should merge with defaults for missing fields", async () => {
@@ -80,6 +82,7 @@ describe("config", () => {
       const result = await loadConfig();
 
       expect(result.scheduleTime).toBe("06:00");
+      expect(result.timezone).toBeTruthy();
     });
   });
 
@@ -95,7 +98,11 @@ describe("config", () => {
         claudeEnabled: true,
         codexEnabled: true,
         lastRun: null,
+        lastWarmupAt: { claude: null, codex: null },
+        warmupIntervalSeconds: 18060,
+        warmupMessage: "Hello",
         lastResult: { claude: null, codex: null },
+        timezone: "America/New_York",
       });
 
       expect(mkdir).toHaveBeenCalledWith("/home/user/.warmy", {
@@ -111,6 +118,34 @@ describe("config", () => {
         "/home/user/.warmy/config.json.tmp",
         "/home/user/.warmy/config.json"
       );
+    });
+  });
+
+  describe("detectTimezone", () => {
+    it("should return valid timezone string", async () => {
+      const { detectTimezone } = await import(CONFIG_SRC_PATH);
+      const tz = detectTimezone();
+      expect(typeof tz).toBe("string");
+      expect(tz.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("formatInTimezone", () => {
+    it("should format ISO string in given timezone", async () => {
+      const { formatInTimezone } = await import(CONFIG_SRC_PATH);
+      const result = formatInTimezone("2026-01-01T00:00:00.000Z", "UTC");
+      expect(result).toContain("UTC");
+    });
+
+    it("should return dash for null input", async () => {
+      const { formatInTimezone } = await import(CONFIG_SRC_PATH);
+      expect(formatInTimezone(null, "UTC")).toBe("—");
+    });
+
+    it("should handle non-UTC timezone", async () => {
+      const { formatInTimezone } = await import(CONFIG_SRC_PATH);
+      const result = formatInTimezone("2026-01-01T00:00:00.000Z", "America/New_York");
+      expect(result).toContain("America/New_York");
     });
   });
 

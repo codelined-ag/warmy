@@ -4,6 +4,12 @@ import { homedir, platform } from "os";
 import { existsSync, renameSync, unlinkSync } from "fs";
 import { WARMUP_INTERVAL_SECONDS } from "./warmup/types.js";
 
+export interface WarmupResultEntry {
+  success: boolean;
+  timestamp: string;
+  error?: string | null;
+}
+
 export interface WarmyConfig {
   scheduleTime: string;
   claudeEnabled: boolean;
@@ -16,9 +22,18 @@ export interface WarmyConfig {
   warmupIntervalSeconds: number;
   warmupMessage: string;
   lastResult: {
-    claude: { success: boolean; timestamp: string } | null;
-    codex: { success: boolean; timestamp: string } | null;
+    claude: WarmupResultEntry | null;
+    codex: WarmupResultEntry | null;
   };
+  timezone: string;
+}
+
+export function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
 }
 
 const DEFAULT_CONFIG: WarmyConfig = {
@@ -31,11 +46,12 @@ const DEFAULT_CONFIG: WarmyConfig = {
     codex: null,
   },
   warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
-  warmupMessage: "Hello Claude. Howdy?",
+  warmupMessage: "Hey Claude, just warming up the session. How's it going?",
   lastResult: {
     claude: null,
     codex: null,
   },
+  timezone: detectTimezone(),
 };
 
 export function getConfigPath(): string {
@@ -88,6 +104,16 @@ export function shouldWarmup(lastWarmupAt: string | null, intervalSeconds: numbe
   const elapsed = (now - lastWarmup) / 1000;
 
   return elapsed >= intervalSeconds;
+}
+
+export function formatInTimezone(isoString: string | null, tz: string): string {
+  if (!isoString) return "—";
+  try {
+    const d = new Date(isoString);
+    return d.toLocaleString("en-US", { timeZone: tz, timeStyle: "medium", dateStyle: "short" }) + ` ${tz}`;
+  } catch {
+    return isoString;
+  }
 }
 
 export function getPlatform(): "macos" | "linux" | "windows" {

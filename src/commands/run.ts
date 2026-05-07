@@ -40,7 +40,7 @@ export async function runWarmup(): Promise<void> {
       } else {
         console.error(`✗ ${label} warmup failed: ${result.error}`);
       }
-      config.lastResult[provider] = { success: result.success, timestamp };
+      config.lastResult[provider] = { success: result.success, timestamp, error: result.error };
     } else {
       console.log(`○ ${label}: next warmup at ${new Date(nextWarmup).toISOString()}`);
     }

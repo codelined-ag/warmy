@@ -14,7 +14,7 @@ export async function installCron(
     throw new Error("warmyPath must be an absolute path");
   }
 
-  const cronJob = `*/5 * * * * ${warmyPath} run >> /tmp/warmy.log 2>&1`;
+  const cronJob = `*/5 * * * * ${process.execPath} ${warmyPath} run >> /tmp/warmy.log 2>&1`;
 
   let existingCrons = "";
   try {

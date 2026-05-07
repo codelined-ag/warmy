@@ -4,7 +4,7 @@ vi.mock("child_process", () => ({
   execSync: vi.fn(),
 }));
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const CODEX_SRC_PATH = `${PROJECT_ROOT}/dist/warmup/openai.js`;
 
 describe("warmupCodex", () => {

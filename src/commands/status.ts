@@ -1,5 +1,5 @@
 import { existsSync } from "fs";
-import { loadConfig, getConfigPath } from "../config.js";
+import { loadConfig, getConfigPath, formatInTimezone } from "../config.js";
 import { isSchedulerInstalled } from "../scheduler/index.js";
 import { getNextClaudeWarmup, getNextCodexWarmup } from "../detectors/session.js";
 
@@ -7,12 +7,14 @@ export async function status(): Promise<void> {
   const config = await loadConfig();
   const installed = await isSchedulerInstalled();
   const configPath = getConfigPath();
+  const tz = config.timezone;
 
   console.log("=== Warmy Status ===\n");
   console.log(`Config file: ${configPath} ${existsSync(configPath) ? "✓" : "(not found)"}`);
   console.log(`Scheduler:   ${installed ? "✓ installed (every 5 min)" : "✗ not installed"}`);
   console.log(`Claude Code: ${config.claudeEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Codex CLI:   ${config.codexEnabled ? "✓ enabled" : "✗ disabled"}`);
+  console.log(`Timezone:    ${tz}`);
   console.log(`Message:     "${config.warmupMessage}"`);
 
   if (config.claudeEnabled) {
@@ -26,7 +28,9 @@ export async function status(): Promise<void> {
       console.log(`\nClaude:    window reset, warmup ready to fire`);
     } else {
       const mins = Math.floor((next - Date.now()) / 60000);
-      console.log(`\nClaude:    next warmup at ${new Date(next).toISOString()} (${mins} min)`);
+      const nextFmt = new Date(next).toISOString();
+      const nextLocal = formatInTimezone(nextFmt, tz);
+      console.log(`\nClaude:    next warmup at ${nextFmt} (${mins} min) — ${nextLocal}`);
     }
   }
 
@@ -38,17 +42,21 @@ export async function status(): Promise<void> {
       console.log(`Codex:     window reset, warmup ready to fire`);
     } else {
       const mins = Math.floor((next - Date.now()) / 60000);
-      console.log(`Codex:     next warmup at ${new Date(next).toISOString()} (${mins} min)`);
+      const nextFmt = new Date(next).toISOString();
+      const nextLocal = formatInTimezone(nextFmt, tz);
+      console.log(`Codex:     next warmup at ${nextFmt} (${mins} min) — ${nextLocal}`);
     }
   }
 
-  if (config.lastRun) console.log(`\nLast run: ${config.lastRun}`);
+  if (config.lastRun) console.log(`\nLast run: ${formatInTimezone(config.lastRun, tz)}`);
   if (config.lastResult.claude) {
-    const { success, timestamp } = config.lastResult.claude;
-    console.log(`Claude result: ${success ? "✓" : "✗"} at ${timestamp}`);
+    const r = config.lastResult.claude;
+    const line = `Claude result: ${r.success ? "✓" : "✗"} at ${formatInTimezone(r.timestamp, tz)}`;
+    console.log(r.success ? line : `${line}\n               error: ${r.error || "unknown"}`);
   }
   if (config.lastResult.codex) {
-    const { success, timestamp } = config.lastResult.codex;
-    console.log(`Codex result:  ${success ? "✓" : "✗"} at ${timestamp}`);
+    const r = config.lastResult.codex;
+    const line = `Codex result:  ${r.success ? "✓" : "✗"} at ${formatInTimezone(r.timestamp, tz)}`;
+    console.log(r.success ? line : `${line}\n               error: ${r.error || "unknown"}`);
   }
 }

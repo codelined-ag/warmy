@@ -6,7 +6,7 @@ vi.mock("../../dist/config.js", () => ({
 vi.mock("../../dist/scheduler/index.js", () => ({ uninstallScheduler: vi.fn() }));
 vi.mock("../../dist/keyring.js", () => ({ removeToken: vi.fn() }));
 
-const UNINSTALL_PATH = "/home/slay/projects/experiments/warmy/warmy/dist/commands/uninstall.js";
+const UNINSTALL_PATH = "/home/slay/projects/codex-projects/warmy/warmy/dist/commands/uninstall.js";
 
 describe("uninstall", () => {
   beforeEach(() => { vi.clearAllMocks(); });

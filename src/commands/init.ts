@@ -3,7 +3,7 @@ import { platform } from "os";
 import { fileURLToPath } from "url";
 import { isClaudeInstalled } from "../detectors/claude.js";
 import { isCodexInstalled } from "../detectors/codex.js";
-import { loadConfig, saveConfig, getWarmyDir, getPlatform, type WarmyConfig } from "../config.js";
+import { loadConfig, saveConfig, getWarmyDir, getPlatform, detectTimezone, type WarmyConfig } from "../config.js";
 import { WARMUP_INTERVAL_SECONDS } from "../warmup/types.js";
 import { installScheduler } from "../scheduler/index.js";
 
@@ -59,10 +59,14 @@ export async function init(): Promise<void> {
     }
   }
 
+  const defaultTz = cfg.timezone || detectTimezone();
+  const tzAnswer = await ask(`Timezone [${defaultTz}]: `);
+  const timezone = tzAnswer.trim() || defaultTz;
+
   const newConfig: WarmyConfig = {
-    ...cfg, scheduleTime,
+    ...cfg, scheduleTime, timezone,
     claudeEnabled: enableClaude, codexEnabled: enableCodex,
-    lastWarmupAt: { claude: null, codex: null },
+    lastWarmupAt: cfg.lastWarmupAt || { claude: null, codex: null },
     warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
   };
 

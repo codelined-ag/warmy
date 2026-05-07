@@ -4,10 +4,11 @@ vi.mock("../../dist/config.js", () => ({
   loadConfig: vi.fn(),
   saveConfig: vi.fn(),
   getConfigPath: vi.fn().mockReturnValue("/tmp/.warmy/config.json"),
+  detectTimezone: vi.fn().mockReturnValue("UTC"),
 }));
 vi.mock("fs", () => ({ existsSync: vi.fn() }));
 
-const CONFIG_PATH = "/home/slay/projects/experiments/warmy/warmy/dist/commands/config.js";
+const CONFIG_PATH = "/home/slay/projects/codex-projects/warmy/warmy/dist/commands/config.js";
 
 describe("setMessage", () => {
   beforeEach(() => { vi.clearAllMocks(); });
@@ -18,7 +19,8 @@ describe("setMessage", () => {
       scheduleTime: "06:00", claudeEnabled: false, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: 18060, warmupMessage: "Hello",
-      lastResult: { claude: null, codex: null }
+      lastResult: { claude: null, codex: null },
+      timezone: "UTC"
     });
 
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});

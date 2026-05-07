@@ -5,7 +5,7 @@ vi.mock("../dist/commands/uninstall.js", () => ({ uninstall: vi.fn() }));
 vi.mock("../dist/commands/status.js", () => ({ status: vi.fn() }));
 vi.mock("../dist/commands/run.js", () => ({ runWarmup: vi.fn() }));
 
-const CLI_PATH = "/home/slay/projects/experiments/warmy/warmy/dist/cli.js";
+const CLI_PATH = "/home/slay/projects/codex-projects/warmy/warmy/dist/cli.js";
 
 describe("CLI entry point", () => {
   beforeEach(() => { vi.clearAllMocks(); });

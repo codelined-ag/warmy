@@ -4,7 +4,7 @@ import { writeFile, chmod, mkdir, rm } from "fs/promises";
 import { existsSync } from "fs";
 import { homedir } from "os";
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const CRON_SRC_PATH = `${PROJECT_ROOT}/dist/scheduler/cron.js`;
 
 vi.mock("child_process", async () => {

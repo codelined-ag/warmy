@@ -11,7 +11,7 @@ vi.mock("child_process", () => {
   return { execSync: mockExec };
 });
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const SESSION_PATH = `${PROJECT_ROOT}/dist/detectors/session.js`;
 
 describe("getNextClaudeWarmup", () => {

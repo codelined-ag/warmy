@@ -4,7 +4,7 @@ import { readFile } from "fs/promises";
 import { homedir } from "os";
 import { execSync } from "child_process";
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const CLAUDE_SRC_PATH = `${PROJECT_ROOT}/dist/detectors/claude.js`;
 
 vi.mock("fs", async () => {

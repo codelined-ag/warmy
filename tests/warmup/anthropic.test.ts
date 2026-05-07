@@ -1,6 +1,6 @@
 import { describe, it, vi, beforeEach, expect } from "vitest";
 
-const PROJECT_ROOT = "/home/slay/projects/experiments/warmy/warmy";
+const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const CLAUDE_SRC_PATH = `${PROJECT_ROOT}/dist/warmup/anthropic.js`;
 
 vi.mock("fs", () => ({
