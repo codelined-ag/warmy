@@ -2,16 +2,21 @@ import { existsSync } from "fs";
 import { loadConfig, getConfigPath, formatInTimezone } from "../config.js";
 import { isSchedulerInstalled } from "../scheduler/index.js";
 import { getNextClaudeWarmup, getNextCodexWarmup } from "../detectors/session.js";
+import { isDaemonRunning, readDaemonPid, DEFAULT_POLL_INTERVAL_SECONDS } from "../daemon.js";
 
 export async function status(): Promise<void> {
   const config = await loadConfig();
   const installed = await isSchedulerInstalled();
+  const daemonAlive = await isDaemonRunning();
+  const daemonPid = await readDaemonPid();
   const configPath = getConfigPath();
   const tz = config.timezone;
+  const pollInterval = config.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS;
 
   console.log("=== Warmy Status ===\n");
   console.log(`Config file: ${configPath} ${existsSync(configPath) ? "✓" : "(not found)"}`);
-  console.log(`Scheduler:   ${installed ? "✓ installed (every 5 min)" : "✗ not installed"}`);
+  console.log(`Scheduler:   ${installed ? "✓ installed (auto-starts on reboot)" : "✗ not installed"}`);
+  console.log(`Daemon:      ${daemonAlive ? `✓ running (pid ${daemonPid}, poll=${pollInterval}s)` : "✗ not running"}`);
   console.log(`Claude Code: ${config.claudeEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Codex CLI:   ${config.codexEnabled ? "✓ enabled" : "✗ disabled"}`);
   console.log(`Timezone:    ${tz}`);

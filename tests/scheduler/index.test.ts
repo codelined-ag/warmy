@@ -77,7 +77,7 @@ describe("scheduler/index", () => {
         get: () => () => "linux",
       });
 
-      vi.mocked(execSync).mockReturnValue("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1");
+      vi.mocked(execSync).mockReturnValue("@reboot /usr/local/bin/warmy ensure-daemon # warmy-managed");
 
       const { isSchedulerInstalled } = await import(INDEX_SRC_PATH);
       const result = await isSchedulerInstalled();

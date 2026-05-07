@@ -51,7 +51,7 @@ describe("launchd", () => {
       );
     });
 
-    it("should set correct StartInterval in plist", async () => {
+    it("should configure daemon mode with KeepAlive in plist", async () => {
       vi.mocked(execSync).mockReturnValue(Buffer.from(""));
       vi.mocked(writeFile).mockResolvedValue(undefined);
 
@@ -59,7 +59,10 @@ describe("launchd", () => {
       await installLaunchd("/usr/local/bin/warmy");
 
       const plistContent = vi.mocked(writeFile).mock.calls[0][1] as string;
-      expect(plistContent).toContain("<integer>18060</integer>");
+      expect(plistContent).toContain("<key>KeepAlive</key>");
+      expect(plistContent).toContain("<key>RunAtLoad</key>");
+      expect(plistContent).toContain("<string>daemon</string>");
+      expect(plistContent).not.toContain("<key>StartInterval</key>");
     });
 
     it("should include warmy path in ProgramArguments", async () => {

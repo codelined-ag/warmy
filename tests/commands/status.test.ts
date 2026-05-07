@@ -15,6 +15,11 @@ vi.mock("../../dist/detectors/session.js", () => ({
   getNextCodexWarmup: vi.fn(),
 }));
 vi.mock("fs", () => ({ existsSync: vi.fn() }));
+vi.mock("../../dist/daemon.js", () => ({
+  isDaemonRunning: vi.fn().mockResolvedValue(false),
+  readDaemonPid: vi.fn().mockResolvedValue(null),
+  DEFAULT_POLL_INTERVAL_SECONDS: 30,
+}));
 
 const STATUS_PATH = "/home/slay/projects/codex-projects/warmy/warmy/dist/commands/status.js";
 

@@ -20,6 +20,7 @@ export interface WarmyConfig {
     codex: string | null;
   };
   warmupIntervalSeconds: number;
+  pollIntervalSeconds: number;
   warmupMessage: string;
   lastResult: {
     claude: WarmupResultEntry | null;
@@ -46,6 +47,7 @@ const DEFAULT_CONFIG: WarmyConfig = {
     codex: null,
   },
   warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
+  pollIntervalSeconds: 30,
   warmupMessage: "Hey Claude, just warming up the session. How's it going?",
   lastResult: {
     claude: null,

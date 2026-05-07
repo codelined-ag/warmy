@@ -1,8 +1,5 @@
 import { describe, it, vi, beforeEach, afterEach, expect } from "vitest";
 import { execSync } from "child_process";
-import { writeFile, chmod, mkdir, rm } from "fs/promises";
-import { existsSync } from "fs";
-import { homedir } from "os";
 
 const PROJECT_ROOT = "/home/slay/projects/codex-projects/warmy/warmy";
 const CRON_SRC_PATH = `${PROJECT_ROOT}/dist/scheduler/cron.js`;
@@ -50,7 +47,7 @@ describe("cron", () => {
 
     it("should remove existing warmy entries before adding", async () => {
       vi.mocked(execSync)
-        .mockReturnValueOnce("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1\n0 * * * * other")
+        .mockReturnValueOnce("@reboot /usr/local/bin/warmy ensure-daemon # warmy-managed\n0 * * * * other")
         .mockReturnValueOnce("");
 
       const { installCron } = await import(CRON_SRC_PATH);
@@ -62,12 +59,21 @@ describe("cron", () => {
       expect(crontabCmd).toContain("crontab");
       expect(crontabCmd).toContain("/tmp/warmy-cron-");
     });
+
+    it("should install both @reboot and watchdog entries", async () => {
+      vi.mocked(execSync).mockReturnValue("");
+
+      const { installCron } = await import(CRON_SRC_PATH);
+      await installCron("/usr/local/bin/warmy");
+
+      expect(execSync).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("uninstallCron", () => {
     it("should remove warmy entry from crontab", async () => {
       vi.mocked(execSync)
-        .mockReturnValueOnce("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1\n0 * * * * other")
+        .mockReturnValueOnce("@reboot /usr/local/bin/warmy ensure-daemon # warmy-managed\n0 * * * * other")
         .mockReturnValueOnce("");
 
       const { uninstallCron } = await import(CRON_SRC_PATH);
@@ -79,7 +85,7 @@ describe("cron", () => {
 
   describe("isCronInstalled", () => {
     it("should return true when warmy entry exists", async () => {
-      vi.mocked(execSync).mockReturnValue("*/5 * * * * /usr/local/bin/warmy run >> /tmp/warmy.log 2>&1");
+      vi.mocked(execSync).mockReturnValue("@reboot /usr/local/bin/warmy ensure-daemon # warmy-managed");
 
       const { isCronInstalled } = await import(CRON_SRC_PATH);
       const result = await isCronInstalled();

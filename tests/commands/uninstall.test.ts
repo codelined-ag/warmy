@@ -2,9 +2,14 @@ import { describe, it, vi, beforeEach, expect } from "vitest";
 
 vi.mock("../../dist/config.js", () => ({
   getConfigPath: vi.fn().mockReturnValue("/tmp/.warmy/config.json"),
+  getWarmyDir: vi.fn().mockReturnValue("/tmp/.warmy"),
 }));
 vi.mock("../../dist/scheduler/index.js", () => ({ uninstallScheduler: vi.fn() }));
 vi.mock("../../dist/keyring.js", () => ({ removeToken: vi.fn() }));
+vi.mock("../../dist/daemon.js", () => ({
+  isDaemonRunning: vi.fn().mockResolvedValue(false),
+  readDaemonPid: vi.fn().mockResolvedValue(null),
+}));
 
 const UNINSTALL_PATH = "/home/slay/projects/codex-projects/warmy/warmy/dist/commands/uninstall.js";
 

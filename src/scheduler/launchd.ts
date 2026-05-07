@@ -3,7 +3,6 @@ import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
 import { existsSync } from "fs";
-import { WARMUP_INTERVAL_SECONDS } from "../warmup/types.js";
 
 const PLIST_NAME = "com.warmy.warmy.plist";
 
@@ -16,8 +15,9 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function generatePlist(warmyPath: string): string {
+function generatePlist(warmyPath: string, nodePath: string): string {
   const safePath = escapeXml(warmyPath);
+  const safeNode = escapeXml(nodePath);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -27,17 +27,20 @@ function generatePlist(warmyPath: string): string {
     <string>com.warmy.warmy</string>
     <key>ProgramArguments</key>
     <array>
+        <string>${safeNode}</string>
         <string>${safePath}</string>
-        <string>run</string>
+        <string>daemon</string>
     </array>
-    <key>StartInterval</key>
-    <integer>${WARMUP_INTERVAL_SECONDS}</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
     <key>StandardOutPath</key>
     <string>/tmp/warmy.stdout.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/warmy.stderr.log</string>
-    <key>RunAtLoad</key>
-    <true/>
 </dict>
 </plist>`;
 }
@@ -57,7 +60,7 @@ export async function installLaunchd(warmyPath: string): Promise<void> {
     throw new Error(`Failed to create LaunchAgents directory: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  const plist = generatePlist(warmyPath);
+  const plist = generatePlist(warmyPath, process.execPath);
 
   try {
     await writeFile(plistPath, plist, "utf-8");
@@ -69,6 +72,11 @@ export async function installLaunchd(warmyPath: string): Promise<void> {
     await chmod(plistPath, 0o600);
   } catch (err) {
     throw new Error(`Failed to set plist permissions: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  try {
+    execSync(`launchctl unload "${plistPath}" 2>/dev/null`, { stdio: "pipe" });
+  } catch {
   }
 
   try {

@@ -6,6 +6,7 @@ import { isCodexInstalled } from "../detectors/codex.js";
 import { loadConfig, saveConfig, getWarmyDir, getPlatform, detectTimezone, type WarmyConfig } from "../config.js";
 import { WARMUP_INTERVAL_SECONDS } from "../warmup/types.js";
 import { installScheduler } from "../scheduler/index.js";
+import { DEFAULT_POLL_INTERVAL_SECONDS, isDaemonRunning, startDaemonDetached } from "../daemon.js";
 
 function ask(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -63,28 +64,43 @@ export async function init(): Promise<void> {
   const tzAnswer = await ask(`Timezone [${defaultTz}]: `);
   const timezone = tzAnswer.trim() || defaultTz;
 
+  const pollInterval = cfg.pollIntervalSeconds || DEFAULT_POLL_INTERVAL_SECONDS;
+
   const newConfig: WarmyConfig = {
     ...cfg, scheduleTime, timezone,
     claudeEnabled: enableClaude, codexEnabled: enableCodex,
     lastWarmupAt: cfg.lastWarmupAt || { claude: null, codex: null },
     warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
+    pollIntervalSeconds: pollInterval,
   };
 
   await saveConfig(newConfig);
 
   console.log("\n=== Installing scheduler ===\n");
 
+  const warmyPath = process.argv[1] || fileURLToPath(import.meta.url);
+
   try {
-    const warmyPath = process.argv[1] || fileURLToPath(import.meta.url);
     await installScheduler(warmyPath);
-    console.log("✓ Scheduler installed (runs every 5 minutes)\n");
+    console.log("✓ Scheduler installed (auto-starts on reboot)\n");
   } catch (err) {
     console.error(`✗ Failed to install scheduler: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
+  if (await isDaemonRunning()) {
+    console.log("✓ Daemon already running\n");
+  } else {
+    try {
+      const pid = await startDaemonDetached(warmyPath);
+      console.log(`✓ Daemon started (pid ${pid})\n`);
+    } catch (err) {
+      console.error(`✗ Failed to start daemon: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   console.log("=== Warmy setup complete! ===\n");
-  console.log("Schedule: Every 5 minutes (keeps sessions warm near 5hr window end)");
+  console.log(`Polling: every ${pollInterval}s (window-aware, fires only when window expires)`);
   console.log(`Claude Code warmup: ${newConfig.claudeEnabled ? "enabled" : "disabled"}`);
   console.log(`Codex CLI warmup: ${newConfig.codexEnabled ? "enabled" : "disabled"}`);
   console.log("\nRun 'warmy run' to trigger a warmup now.");

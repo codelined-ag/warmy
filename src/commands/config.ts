@@ -20,6 +20,7 @@ export async function configEdit(): Promise<void> {
       scheduleTime: "06:00", claudeEnabled: false, codexEnabled: false,
       lastRun: null, lastWarmupAt: { claude: null, codex: null },
       warmupIntervalSeconds: WARMUP_INTERVAL_SECONDS,
+      pollIntervalSeconds: 30,
       warmupMessage: "Hey Claude, just warming up the session. How's it going?",
       lastResult: { claude: null, codex: null },
       timezone: detectTimezone(),

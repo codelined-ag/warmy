@@ -6,6 +6,8 @@ import { runWarmup } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { uninstall } from "./commands/uninstall.js";
 import { configEdit, setMessage } from "./commands/config.js";
+import { runDaemon, ensureDaemon, stopDaemon } from "./commands/daemon.js";
+import { upgrade } from "./commands/upgrade.js";
 
 const program = new Command();
 
@@ -39,6 +41,22 @@ program.command("status")
 program.command("uninstall")
   .description("Remove scheduler, config, and stored tokens")
   .action(uninstall);
+
+program.command("daemon")
+  .description("Run as a long-lived daemon process (used by scheduler)")
+  .action(runDaemon);
+
+program.command("ensure-daemon")
+  .description("Start the daemon if it isn't already running (used as a watchdog)")
+  .action(ensureDaemon);
+
+program.command("stop-daemon")
+  .description("Stop the running warmy daemon")
+  .action(stopDaemon);
+
+program.command("upgrade")
+  .description("Pull the latest version from npm without touching config")
+  .action(upgrade);
 
 program.command("edit-config")
   .description("Open config file in your $EDITOR")
