@@ -59,8 +59,9 @@ The daemon writes its PID to `~/.warmy/daemon.pid` and refuses to start a second
 | `warmy status` | Config, scheduler, daemon PID, next warmup time. |
 | `warmy run` | Run a single warmup check now. Useful for debugging. |
 | `warmy daemon` | Run the polling loop in the foreground. Used by the scheduler. |
-| `warmy ensure-daemon` | Start the daemon if it isn't running. Used as a watchdog. |
-| `warmy stop-daemon` | Send `SIGTERM` to the running daemon. |
+| `warmy ensure-daemon` | Start the daemon if not running and not explicitly stopped. Used by the cron watchdog. |
+| `warmy start-daemon` | Clear the stop marker and start. Use after `stop-daemon`. |
+| `warmy stop-daemon` | Stop the daemon and prevent the watchdog from restarting it. |
 | `warmy upgrade` | Pull `@codelined/warmy@latest` from npm. Leaves config alone. |
 | `warmy set-message "..."` | Customize the warmup message. |
 | `warmy edit-config` | Open `~/.warmy/config.json` in `$EDITOR`. |
@@ -80,10 +81,11 @@ Both Claude Code and Codex receive this exact message during warmup. The default
 warmy upgrade
 ```
 
-Pulls the latest version globally and never touches `~/.warmy/config.json`. After upgrading, restart the daemon to load the new code:
+Pulls the latest version globally and never touches `~/.warmy/config.json`. By default, `warmy upgrade` also restarts the running daemon so the new code takes effect immediately. Pass `--no-restart` if you want to handle that yourself:
 
 ```bash
-warmy stop-daemon && warmy ensure-daemon
+warmy upgrade --no-restart
+warmy stop-daemon && warmy start-daemon
 ```
 
 ## Requirements
