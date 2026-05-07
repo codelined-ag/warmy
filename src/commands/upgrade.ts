@@ -1,6 +1,7 @@
 import { spawnSync, execSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 const PACKAGE_NAME = "@codelined/warmy";
 
@@ -22,14 +23,14 @@ function findInstallRoot(): string | null {
   return null;
 }
 
-function detectPackageManager(): "npm" | "pnpm" | "yarn" | "bun" {
-  const root = findInstallRoot();
-  if (root) {
-    const grandparent = dirname(dirname(root));
-    if (grandparent.includes("/pnpm/")) return "pnpm";
-    if (grandparent.includes("/yarn/")) return "yarn";
-    if (grandparent.includes("/.bun/")) return "bun";
-  }
+type PackageManager = "npm" | "pnpm" | "yarn" | "bun" | "volta";
+
+function detectPackageManager(): PackageManager {
+  const fullPath = (process.argv[1] || "") + " " + (findInstallRoot() || "");
+  if (/\/\.bun\b|\/bun\/install\b/.test(fullPath)) return "bun";
+  if (/\/\.volta\//.test(fullPath)) return "volta";
+  if (/\/pnpm\/|\/\.pnpm\//.test(fullPath)) return "pnpm";
+  if (/\/yarn\b|\/\.yarn\//.test(fullPath)) return "yarn";
   return "npm";
 }
 
@@ -57,29 +58,90 @@ function fetchLatestVersion(): string | null {
   }
 }
 
-export async function upgrade(): Promise<void> {
+function parseFlags(argv: string[]): { noRestart: boolean } {
+  return { noRestart: argv.includes("--no-restart") };
+}
+
+async function maybeRestartDaemon(noRestart: boolean): Promise<void> {
+  if (noRestart) {
+    console.log("\nSkipping daemon restart (--no-restart). Restart manually with:");
+    console.log("  warmy stop-daemon && warmy start-daemon");
+    return;
+  }
+
+  const daemonMod = await import("../daemon.js");
+  const { isDaemonRunning, readDaemonPid, startDaemonDetached, clearStoppedMarker } = daemonMod;
+
+  if (!(await isDaemonRunning())) {
+    console.log("\nDaemon was not running. Run 'warmy ensure-daemon' to start it.");
+    return;
+  }
+
+  const pid = await readDaemonPid();
+  if (pid === null) return;
+
+  console.log(`\nRestarting daemon (pid ${pid})...`);
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch (err) {
+    console.error(`Failed to send SIGTERM: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const start = Date.now();
+  while (Date.now() - start < 3000) {
+    if (!(await isDaemonRunning())) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  if (await isDaemonRunning()) {
+    try { process.kill(pid, "SIGKILL"); } catch {}
+  }
+
+  clearStoppedMarker();
+
+  const warmyPath = process.argv[1] || fileURLToPath(import.meta.url);
+  try {
+    const newPid = await startDaemonDetached(warmyPath);
+    console.log(`✓ Daemon restarted (pid ${newPid}).`);
+  } catch (err) {
+    console.error(`Failed to restart daemon: ${err instanceof Error ? err.message : String(err)}`);
+    console.error("Run 'warmy ensure-daemon' manually.");
+  }
+}
+
+export async function upgrade(...args: unknown[]): Promise<void> {
+  const argv = (args.find((a) => Array.isArray(a)) as string[] | undefined) ?? process.argv.slice(3);
+  const { noRestart } = parseFlags(argv);
   const pm = detectPackageManager();
   const before = currentVersion();
   const latest = fetchLatestVersion();
 
-  console.log(`Warmy upgrade — current: ${before}${latest ? `, latest: ${latest}` : ""}`);
+  console.log(`Warmy upgrade (via ${pm}) — current: ${before}${latest ? `, latest: ${latest}` : ""}`);
 
   if (latest && before === latest) {
     console.log("✓ Already on latest version. Nothing to do.");
     return;
   }
 
-  const installCmd: Record<typeof pm, [string, string[]]> = {
+  if (pm === "volta") {
+    console.log(
+      "\nVolta detected. Volta does not support 'npm i -g' for arbitrary packages.\n" +
+      `Run manually: volta install ${PACKAGE_NAME}@latest`
+    );
+    return;
+  }
+
+  const installCmd: Record<Exclude<PackageManager, "volta">, [string, string[]]> = {
     npm: ["npm", ["install", "-g", `${PACKAGE_NAME}@latest`]],
     pnpm: ["pnpm", ["add", "-g", `${PACKAGE_NAME}@latest`]],
     yarn: ["yarn", ["global", "add", `${PACKAGE_NAME}@latest`]],
     bun: ["bun", ["add", "-g", `${PACKAGE_NAME}@latest`]],
   };
 
-  const [cmd, args] = installCmd[pm];
-  console.log(`\nRunning: ${cmd} ${args.join(" ")}\n`);
+  const [cmd, cmdArgs] = installCmd[pm];
+  console.log(`\nRunning: ${cmd} ${cmdArgs.join(" ")}\n`);
 
-  const result = spawnSync(cmd, args, {
+  const result = spawnSync(cmd, cmdArgs, {
     stdio: "inherit",
     timeout: 5 * 60_000,
   });
@@ -94,6 +156,6 @@ export async function upgrade(): Promise<void> {
 
   console.log(`\n✓ Upgrade complete.`);
   console.log(`Your config in ~/.warmy/config.json was not touched.`);
-  console.log(`If a daemon is running, restart it to pick up the new version:`);
-  console.log(`  warmy stop-daemon && warmy ensure-daemon`);
+
+  await maybeRestartDaemon(noRestart);
 }
