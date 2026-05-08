@@ -42,10 +42,45 @@ describe("getNextCodexWarmup", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it("should return 0 when db missing", async () => {
-    const { existsSync } = await import("fs");
+    const { existsSync, readdirSync } = await import("fs");
     vi.mocked(existsSync).mockReturnValue(false);
+    vi.mocked(readdirSync).mockReturnValue([] as any);
 
     const { getNextCodexWarmup } = await import(SESSION_PATH);
     expect(getNextCodexWarmup()).toBe(0);
+  });
+
+  it("should return 0 when ~/.codex has no logs_*.sqlite at all", async () => {
+    const { existsSync, readdirSync } = await import("fs");
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(readdirSync).mockReturnValue([
+      "auth.json",
+      "config.toml",
+      "history.jsonl",
+    ] as any);
+
+    const { getNextCodexWarmup } = await import(SESSION_PATH);
+    expect(getNextCodexWarmup()).toBe(0);
+  });
+
+  it("picks the highest-versioned logs_*.sqlite when codex bumps schema", async () => {
+    const { existsSync, readdirSync } = await import("fs");
+    const { execSync } = await import("child_process");
+
+    vi.mocked(readdirSync).mockReturnValue([
+      "logs_1.sqlite",
+      "logs_2.sqlite",
+      "auth.json",
+    ] as any);
+    vi.mocked(existsSync).mockReturnValue(true);
+    vi.mocked(execSync).mockReturnValue("" as any);
+
+    const { getNextCodexWarmup } = await import(SESSION_PATH);
+    getNextCodexWarmup();
+
+    const calls = vi.mocked(execSync).mock.calls.map((c) => String(c[0]));
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((c) => c.includes("logs_2.sqlite"))).toBe(true);
+    expect(calls.some((c) => c.includes("logs_1.sqlite"))).toBe(false);
   });
 });

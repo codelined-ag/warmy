@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, readdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { execSync } from "child_process";
@@ -6,6 +6,27 @@ import { execSync } from "child_process";
 const FIVE_HRS = 5 * 3600 * 1000;
 const ONE_MIN = 60 * 1000;
 const TEN_MIN = 10 * 60 * 1000;
+
+// Codex rotates the schema version in the filename (logs_1, logs_2, ...).
+// At any given time there should be exactly one logs_*.sqlite. We discover
+// it instead of hard-coding a version that goes stale on every Codex bump.
+function findCodexLogDb(codexDir: string): string | null {
+  let entries: string[];
+  try {
+    entries = readdirSync(codexDir);
+  } catch {
+    return null;
+  }
+  const candidates = entries
+    .filter((name) => /^logs_\d+\.sqlite$/.test(name))
+    .map((name) => ({
+      name,
+      version: parseInt(name.match(/^logs_(\d+)\.sqlite$/)![1]!, 10),
+    }))
+    .sort((a, b) => b.version - a.version);
+  if (candidates.length === 0) return null;
+  return join(codexDir, candidates[0]!.name);
+}
 
 function getNextWarmupImpl(oldestInWindow: number | null, newestInWindow: number | null): number | null {
   if (oldestInWindow === null) return 0;
@@ -64,8 +85,8 @@ export function getNextCodexWarmup(lastWarmupAt?: number | null): number | null 
     let oldest: number | null = null;
     let newest: number | null = null;
 
-    const dbPath = join(homedir(), ".codex", "logs_1.sqlite");
-    if (existsSync(dbPath)) {
+    const dbPath = findCodexLogDb(join(homedir(), ".codex"));
+    if (dbPath && existsSync(dbPath)) {
       const cutoff = Math.floor((now - FIVE_HRS) / 1000);
 
       try {
