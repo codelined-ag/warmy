@@ -1,7 +1,6 @@
 import { describe, it, vi, beforeEach, expect } from "vitest";
 
 vi.mock("child_process", () => ({
-  execSync: vi.fn(),
   spawnSync: vi.fn(),
 }));
 
