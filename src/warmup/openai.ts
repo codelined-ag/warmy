@@ -28,7 +28,7 @@ export function warmupCodex(message: string): WarmupResult {
       [
         "exec",
         "--ephemeral",
-        "--dangerously-bypass-approvals-and-sandbox",
+        "--skip-git-repo-check",
         "--sandbox",
         "read-only",
         message,
