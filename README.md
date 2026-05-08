@@ -16,7 +16,7 @@ Warmy automates the second step. It does one thing well:
 
 1. Reads your real API history from `~/.claude/history.jsonl` and `~/.codex/logs_1.sqlite`.
 2. Figures out exactly when your current 5-hour window expires.
-3. Sends a single warmup ping 1 minute after expiry.
+3. Sends a single warmup ping 1 minute after expiry by invoking `claude -p` / `codex exec` directly — the same auth path your real sessions use, so the ping actually counts toward the new window.
 
 If you're actively coding within 10 minutes of the reset, Warmy stays out of your way. Your own activity already refreshed the window.
 
@@ -98,6 +98,14 @@ sudo chown -R $USER ~/.warmy
 ```
 
 **Logs** — the daemon writes to `~/.warmy/daemon.log` and rotates at 5 MB, keeping `daemon.log.1`, `.2`, `.3`. The cron watchdog logs to `~/.warmy/cron.log`.
+
+## How warmups happen
+
+Warmy doesn't speak to the Anthropic or OpenAI APIs directly. It shells out to your installed `claude` / `codex` binary in non-interactive mode (`claude -p --model claude-haiku-4-5 ...` and `codex exec --ephemeral --skip-git-repo-check --sandbox read-only ...`). That means:
+
+- Auth refresh is handled by the CLI you already use — Warmy never touches your tokens.
+- The warmup goes through your subscription path, so it counts toward the same 5-hour window as your real sessions.
+- If you're signed out or your token is dead, the warmup fails the same way `claude -p` fails interactively, with the CLI's own error message.
 
 ## Requirements
 
