@@ -33,18 +33,13 @@ function resolveWarmyPath(): string {
 }
 
 export async function ensureDaemon(): Promise<void> {
-  if (isDaemonStopped()) {
-    console.log("Stopped by user (~/.warmy/stopped present). Run 'warmy start-daemon' to start.");
-    return;
-  }
-  if (await isDaemonRunning()) {
-    const pid = await readDaemonPid();
-    console.log(`Warmy daemon already running (pid ${pid}).`);
-    return;
-  }
+  // Watchdog hook (cron, every minute). Stay silent on the no-op path so the
+  // cron log doesn't accumulate one "already running" line per minute.
+  if (isDaemonStopped()) return;
+  if (await isDaemonRunning()) return;
   try {
     const pid = await startDaemonDetached(resolveWarmyPath());
-    console.log(`Warmy daemon started (pid ${pid}).`);
+    console.log(`[${new Date().toISOString()}] Warmy daemon started (pid ${pid}).`);
   } catch (err) {
     if (err instanceof DaemonAlreadyRunningError) return;
     throw err;
